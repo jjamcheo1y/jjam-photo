@@ -11,9 +11,18 @@
     set: function (k, v) { try { localStorage.setItem("jp-" + k, JSON.stringify(v)); } catch (e) {} }
   };
 
+  var diagBox = null;
+  function diag(msg) {
+    if (!diagBox) { diagBox = document.getElementById("diag"); }
+    if (!diagBox) return;
+    diagBox.textContent = (diagBox.textContent ? diagBox.textContent + "\n" : "") + msg; diagBox.classList.add("show");
+  }
+  window.addEventListener("error", function (e) { diag("오류: " + e.message + " (" + (e.filename || "").split("/").pop() + ":" + e.lineno + ")"); });
+  window.addEventListener("unhandledrejection", function (e) { var r = e.reason; diag("약속 오류: " + ((r && r.message) || r)); });
+
   var S = {
     home: "", roots: [], cwd: null, folders: [], files: [],
-    sort: store.get("sort", { k: "date", d: -1 }), cols: store.get("cols", 3), names: store.get("names", false),
+    sort: store.get("sort", { k: "date", d: -1 }), cols: store.get("cols", 3), names: store.get("names", true),
     sel: new Set(), selOn: false, range: false, anchor: null, last: null,
     trashView: false, trash: [], viewer: null
   };
@@ -111,9 +120,9 @@
     var on = S.sel.has(x.path) ? " on" : "", anc = S.anchor === x.path ? " anchor" : "";
     if (isFolder) {
       var meta = x.root ? "" : (x.media ? x.media + "장" : "") + (x.media && x.sub ? " · " : "") + (x.sub ? "폴더 " + x.sub : "") || "비었어요";
-      return '<div class="it folder' + on + anc + '" data-p="' + esc(x.path) + '" data-f="1"><span class="ck"></span>' + FOLDER_SVG + '<span class="fn">' + esc(x.name) + '</span><span class="fc">' + esc(meta) + "</span></div>";
+      return '<div class="it folder' + on + anc + '" data-p="' + esc(x.path) + '" data-f="1"><div class="th"><span class="ck"></span>' + FOLDER_SVG + '</div><div class="lb">' + esc(x.name) + (meta ? "<small>" + esc(meta) + "</small>" : "") + "</div></div>";
     }
-    return '<div class="it' + on + anc + '" data-p="' + esc(x.path) + '"><img data-p="' + esc(x.path) + '" data-state="" alt=""><span class="ck"></span>' + (x.video ? '<span class="vid">영상</span>' : "") + '<span class="nm">' + esc(x.name) + "</span></div>";
+    return '<div class="it' + on + anc + '" data-p="' + esc(x.path) + '"><div class="th"><img data-p="' + esc(x.path) + '" data-state="" alt=""><span class="ck"></span>' + (x.video ? '<span class="vid">영상</span>' : "") + '</div><div class="lb">' + esc(x.name) + "</div></div>";
   }
   function draw() {
     document.body.classList.toggle("selecting", S.selOn);
@@ -408,11 +417,15 @@
 
   /* ---------- 권한 / 시작 ---------- */
   function checkAccess(manual) {
+    var timer = setTimeout(function () {
+      diag("파일 플러그인이 응답하지 않아요.\n플러그인 등록: " + (window.Capacitor && Capacitor.isPluginAvailable ? Capacitor.isPluginAvailable("PhotoFs") : "?") + "\n네이티브 앱: " + native);
+    }, 4000);
     return FS.hasAccess().then(function (r) {
+      clearTimeout(timer);
       $("#perm").hidden = !!r.granted;
       if (manual) toast(r.granted ? "권한이 켜져 있어요" : "권한이 꺼져 있어요");
       return r.granted;
-    });
+    }, function (e) { clearTimeout(timer); diag("권한 확인 실패: " + ((e && e.message) || e)); $("#perm").hidden = false; return false; });
   }
   $("#permBtn").onclick = function () { FS.requestAccess().catch(err); };
   document.addEventListener("visibilitychange", function () { if (!document.hidden && !$("#perm").hidden) checkAccess().then(function (g) { if (g) start(); }); });
@@ -436,7 +449,7 @@
       S.home = r.home; S.roots = r.roots;
       var last = store.get("cwd", null);
       return go(last && rootOf(last) ? last : null);
-    }).catch(err);
+    }).catch(function (e) { diag("시작 실패: " + ((e && e.message) || e)); });
   }
   checkAccess().then(function (g) { if (g) start(); });
   window.__jp = { S: S, go: go, reload: reload };
