@@ -1,0 +1,6 @@
+{
+  "appId": "com.jjam.photo",
+  "appName": "대짬철갤러리",
+  "webDir": "www",
+  "android": { "allowMixedContent": false }
+}

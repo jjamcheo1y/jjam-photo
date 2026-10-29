@@ -1,0 +1,47 @@
+name: Build APK
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: build-apk
+  cancel-in-progress: true
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: npm }
+      - run: npm ci
+      - run: node --check www/app.js && node --check www/mock.js
+      - run: npx cap sync android
+      - name: 서명 키 준비
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          mkdir -p android/keystore
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > android/keystore/release.jks
+          else
+            echo "::warning::KEYSTORE_B64 비밀값이 없어서 이번 빌드는 임시 키로 서명해요 (덮어 설치가 안 될 수 있어요)"
+            keytool -genkeypair -noprompt -keystore android/keystore/release.jks -storetype PKCS12 -alias jjam -keyalg RSA -keysize 2048 -validity 36500 -storepass jjamphoto -keypass jjamphoto -dname "CN=jjam-photo"
+          fi
+      - name: Build release APK
+        working-directory: android
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+        run: ./gradlew assembleRelease --no-daemon
+      - name: Publish to the "latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk daejjamcheol-gallery.apk
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest daejjamcheol-gallery.apk --target "$GITHUB_SHA" \
+            --title "대짬철갤러리 (빌드 ${{ github.run_number }})" \
+            --notes "폰에서 이 APK 를 받아 설치하세요. 기존 앱 위에 덮어 설치돼요. (${GITHUB_SHA::7})"
