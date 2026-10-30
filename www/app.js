@@ -4,21 +4,16 @@
   var $ = function (s, e) { return (e || document).querySelector(s); };
   var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
   var native = !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
-  var FS = native ? Capacitor.registerPlugin("PhotoFs") : MockFS();
-  var AppPlug = native && Capacitor.Plugins ? Capacitor.Plugins.App : null;
+  var FS;
+  try { FS = native ? Capacitor.registerPlugin("PhotoFs") : MockFS(); } catch (e) { window.__diag && window.__diag("플러그인 준비 실패: " + e.message); throw e; }
+  var AppPlug = null;
+  try { if (native) AppPlug = Capacitor.registerPlugin("App"); } catch (e) { AppPlug = null; }
   var store = {
     get: function (k, d) { try { var v = localStorage.getItem("jp-" + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set: function (k, v) { try { localStorage.setItem("jp-" + k, JSON.stringify(v)); } catch (e) {} }
   };
 
-  var diagBox = null;
-  function diag(msg) {
-    if (!diagBox) { diagBox = document.getElementById("diag"); }
-    if (!diagBox) return;
-    diagBox.textContent = (diagBox.textContent ? diagBox.textContent + "\n" : "") + msg; diagBox.classList.add("show");
-  }
-  window.addEventListener("error", function (e) { diag("오류: " + e.message + " (" + (e.filename || "").split("/").pop() + ":" + e.lineno + ")"); });
-  window.addEventListener("unhandledrejection", function (e) { var r = e.reason; diag("약속 오류: " + ((r && r.message) || r)); });
+  function diag(msg) { if (window.__diag) window.__diag(msg); }
 
   var S = {
     home: "", roots: [], cwd: null, folders: [], files: [],
@@ -439,7 +434,7 @@
     if (S.cwd != null) { var r = rootOf(S.cwd); go(r && r.path === S.cwd ? null : parentOf(S.cwd)); return true; }
     return false;
   }
-  if (AppPlug && AppPlug.addListener) AppPlug.addListener("backButton", function () { if (!back()) AppPlug.exitApp(); });
+  if (AppPlug && AppPlug.addListener) { try { AppPlug.addListener("backButton", function () { if (!back()) AppPlug.exitApp(); }); } catch (e) {} }
   window.addEventListener("keydown", function (e) { if (e.key === "Escape") back(); });
 
   var started = false;

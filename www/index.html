@@ -9,6 +9,13 @@
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
+<div id="diag"></div>
+<script>
+/* 앱이 시작도 못 하고 멈출 때를 대비한 맨 앞 진단: 오류를 화면 위에 보여 줌 */
+window.__diag = function (m) { var d = document.getElementById("diag"); if (!d) return; d.textContent += (d.textContent ? "\n" : "") + m; d.classList.add("show"); };
+window.addEventListener("error", function (e) { window.__diag("오류: " + e.message + " (" + String(e.filename || "").split("/").pop() + ":" + e.lineno + ")"); });
+window.addEventListener("unhandledrejection", function (e) { var r = e.reason; window.__diag("약속 오류: " + ((r && r.message) || r)); });
+</script>
 <div id="app">
   <header id="top">
     <div class="row main">
@@ -57,7 +64,7 @@
   </div>
 </div>
 <div id="toast"></div>
-<div id="diag"></div>
+<script src="capacitor.js"></script>
 <script src="mock.js"></script>
 <script src="app.js"></script>
 </body>

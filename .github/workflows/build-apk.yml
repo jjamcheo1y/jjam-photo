@@ -19,6 +19,7 @@ jobs:
         with: { node-version: '22', cache: npm }
       - run: npm ci
       - run: node --check www/app.js && node --check www/mock.js
+      - run: cp node_modules/@capacitor/core/dist/capacitor.js www/capacitor.js
       - run: npx cap sync android
       - name: 서명 키 준비
         env:
