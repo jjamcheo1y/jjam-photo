@@ -188,6 +188,23 @@ public class PhotoFsPlugin extends Plugin {
         if (!deleteAny(a)) throw new Exception("원본을 지우지 못했어요");
     }
 
+    /** 폴더 안(하위 폴더 포함)에 사진/영상이 하나라도 있는지. 너무 깊거나 많으면 있다고 쳐 줌 */
+    private static boolean hasMedia(File dir, int[] budget, int depth) {
+        File[] kids = dir.listFiles();
+        if (kids == null) return false;
+        for (File k : kids) {
+            if (k.getName().startsWith(".")) continue;
+            if (--budget[0] < 0) return true;
+            if (!k.isDirectory() && isMedia(k.getName())) return true;
+        }
+        if (depth <= 0) return false;
+        for (File k : kids) {
+            if (k.getName().startsWith(".") || !k.isDirectory()) continue;
+            if (hasMedia(k, budget, depth - 1)) return true;
+        }
+        return false;
+    }
+
     /* ---------- 목록 ---------- */
     @PluginMethod
     public void roots(PluginCall call) {
@@ -234,6 +251,7 @@ public class PhotoFsPlugin extends Plugin {
                                 else if (isMedia(c.getName())) { media++; if (cover == null && !VID.contains(ext(c.getName()))) cover = c.getPath(); }
                             }
                             if (cover != null) o.put("cover", cover);
+                            o.put("has", media > 0 || (sub > 0 && hasMedia(k, new int[]{3000}, 8)));
                             o.put("media", media);
                             o.put("sub", sub);
                             folders.put(o);
@@ -275,15 +293,22 @@ public class PhotoFsPlugin extends Plugin {
         o.put("name", dir.getName());
         o.put("path", dir.getPath());
         JSArray kids = new JSArray();
-        if (depth > 0) {
-            File[] list = dir.listFiles();
-            if (list != null) {
-                Arrays.sort(list, (x, y) -> x.getName().compareToIgnoreCase(y.getName()));
-                for (File k : list) {
-                    if (k.isDirectory() && !k.getName().startsWith(".")) kids.put(treeOf(k, depth - 1));
-                }
+        boolean has = false;
+        File[] list = dir.listFiles();
+        if (list != null) {
+            Arrays.sort(list, (x, y) -> x.getName().compareToIgnoreCase(y.getName()));
+            for (File k : list) {
+                if (k.getName().startsWith(".")) continue;
+                if (k.isDirectory()) {
+                    if (depth > 0) {
+                        JSObject c = treeOf(k, depth - 1);
+                        kids.put(c);
+                        if (c.optBoolean("has")) has = true;
+                    } else if (!has && hasMedia(k, new int[]{800}, 4)) has = true;
+                } else if (!has && isMedia(k.getName())) has = true;
             }
         }
+        o.put("has", has);
         o.put("kids", kids);
         return o;
     }

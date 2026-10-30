@@ -16,6 +16,7 @@ window.__diag = function (m) { var d = document.getElementById("diag"); if (!d) 
 window.addEventListener("error", function (e) { window.__diag("오류: " + e.message + " (" + String(e.filename || "").split("/").pop() + ":" + e.lineno + ")"); });
 window.addEventListener("unhandledrejection", function (e) { var r = e.reason; window.__diag("약속 오류: " + ((r && r.message) || r)); });
 </script>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="fg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a9c8ff"/><stop offset="1" stop-color="#6f9bea"/></linearGradient></defs></svg>
 <div id="app">
   <header id="top">
     <div class="row main">
@@ -36,8 +37,20 @@ window.addEventListener("unhandledrejection", function (e) { var r = e.reason; w
   <div id="hint"></div>
   <div id="panes">
     <main id="scroll" class="pane"><div id="grid"></div><div id="empty" hidden></div></main>
+    <section id="card" class="pane">
+      <div class="ctop"><b id="cName"></b><span id="cPos"></span></div>
+      <div id="cStage"><img id="cImg" alt="" draggable="false"><div id="cEmpty"></div></div>
+      <div class="cbar">
+        <button class="cb" id="cPrev">‹ 이전</button>
+        <button class="cb danger" id="cDel">삭제</button>
+        <button class="cb" id="cOpen">갤러리</button>
+        <button class="cb" id="cNext">다음 ›</button>
+      </div>
+      <div class="chint">위로 쓸어 올리면 삭제 · 옆으로 넘기면 건너뛰기 · 아래 폴더를 누르면 옮기기</div>
+    </section>
     <div id="mid">
       <div id="grip" aria-label="칸 크기 조절"><svg viewBox="0 0 24 24"><path d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg></div>
+      <button class="pill" id="btnCard">카드</button>
       <footer id="actions">
         <button class="act" data-a="move">이동</button>
         <button class="act" data-a="rename">이름 바꾸기</button>
@@ -70,6 +83,8 @@ window.addEventListener("unhandledrejection", function (e) { var r = e.reason; w
   <button class="vnav l" id="vPrev">‹</button><button class="vnav r" id="vNext">›</button>
 </div>
 
+<div id="popScrim" hidden></div>
+<div id="pop" hidden></div>
 <div id="sheetWrap" hidden><div id="sheet"></div></div>
 <div id="perm" hidden>
   <div class="pbox">

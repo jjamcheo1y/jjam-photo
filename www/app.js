@@ -19,7 +19,7 @@
     home: "", roots: [], cwd: null, folders: [], files: [],
     sort: store.get("sort", { k: "date", d: -1 }), cols: store.get("cols", 3), names: store.get("names", true),
     sel: new Set(), selOn: false, range: false, anchor: null, last: null,
-    trashView: false, trash: [], viewer: null
+    trashView: false, trash: [], viewer: null, hideEmpty: store.get("hideEmpty", true), fresh: new Set(), card: store.get("card", false), ci: 0
   };
 
   /* ---------- 알림 / 창 ---------- */
@@ -69,6 +69,8 @@
       return r * d || cmpName(a, b);
     });
   }
+  function vis(f) { return !S.hideEmpty || f.has !== false || S.fresh.has(f.path); }
+  function prune2(n) { n.kids = (n.kids || []).filter(vis).map(prune2); return n; }
   function order() { return S.folders.concat(S.files); }
 
   function go(path, keepSel) {
@@ -79,10 +81,11 @@
       draw(); return Promise.resolve();
     }
     return FS.list({ path: path }).then(function (r) {
-      S.cwd = path; S.folders = r.folders; S.files = r.files; sortList(); store.set("cwd", path); draw(); $("#scroll").scrollTop = 0;
+      if (S.cwd !== path) S.ci = 0;
+      S.cwd = path; S.folders = r.folders.filter(vis); S.files = r.files; sortList(); store.set("cwd", path); draw(); $("#scroll").scrollTop = 0;
     }).catch(function (e) { err(e); if (S.cwd !== path) go(null); });
   }
-  function reload() { treeCache = null; B.flat = null; return S.cwd == null ? go(null, true) : FS.list({ path: S.cwd }).then(function (r) { S.folders = r.folders; S.files = r.files; sortList(); prune(); draw(); }); }
+  function reload() { treeCache = null; B.flat = null; return S.cwd == null ? go(null, true) : FS.list({ path: S.cwd }).then(function (r) { S.folders = r.folders.filter(vis); S.files = r.files; sortList(); prune(); draw(); }); }
   function prune() { var ok = new Set(order().map(function (x) { return x.path; })); S.sel.forEach(function (p) { if (!ok.has(p)) S.sel.delete(p); }); if (!S.sel.size) S.selOn = false, S.range = false; }
 
   /* ---------- 그리기 ---------- */
@@ -160,6 +163,7 @@
     }
     setupIO(); g.querySelectorAll(".it").forEach(function (n) { io.observe(n); });
     var em = $("#empty"), n = S.trashView ? S.trash.length : S.folders.length + S.files.length;
+    if (cardOn()) drawCard();
     em.hidden = n > 0; em.textContent = S.trashView ? "휴지통이 비었어요 (30일 지나면 자동으로 지워져요)" : "이 폴더에는 사진이 없어요";
   }
   function paintSel() {
@@ -264,26 +268,39 @@
   $("#btnAll").onclick = function () { var v = ids(); if (S.sel.size === v.length) { clearSel(); } else { v.forEach(function (x) { S.sel.add(x); }); S.selOn = true; } paintSel(); };
   $("#btnRange").onclick = function () { S.range = !S.range; S.anchor = null; paintSel(); };
   $("#btnSort").onclick = openSort;
+  /* 위에서 펼쳐지는 작은 메뉴 */
+  function closePop() { $("#pop").hidden = true; $("#pop").innerHTML = ""; $("#popScrim").hidden = true; }
+  function popMenu(anchor, html, bind) {
+    var pop = $("#pop"); pop.innerHTML = html; pop.hidden = false; $("#popScrim").hidden = false;
+    var r = anchor.getBoundingClientRect();
+    pop.style.top = (r.bottom + 6) + "px"; pop.style.right = Math.max(8, window.innerWidth - r.right) + "px";
+    bind && bind(pop);
+  }
+  $("#popScrim").onclick = closePop;
   $("#btnMore").onclick = function () {
-    sheet('<div class="body"><button class="mi" data-m="mk">＋ 새 폴더 만들기</button><button class="mi" data-m="trash">휴지통 보기</button><button class="mi" data-m="re">새로고침</button><button class="mi" data-m="perm">파일 접근 권한 확인</button></div>', function (el, close) {
-      el.querySelectorAll("[data-m]").forEach(function (b) { b.onclick = function () { close(b.dataset.m); }; });
-    }).then(function (m) {
-      if (m === "mk") newFolder(S.cwd);
-      else if (m === "trash") openTrash();
-      else if (m === "re") reload();
-      else if (m === "perm") checkAccess(true);
+    popMenu(this, '<button class="mi" data-m="mk">＋ 새 폴더 만들기</button><button class="mi" data-m="trash">휴지통 보기</button><button class="mi' + (S.hideEmpty ? " on" : "") + '" data-m="empty">사진 없는 폴더 숨기기</button><button class="mi" data-m="re">새로고침</button><button class="mi" data-m="perm">파일 접근 권한 확인</button>', function (el) {
+      el.querySelectorAll("[data-m]").forEach(function (b) {
+        b.onclick = function () {
+          var m = b.dataset.m; closePop();
+          if (m === "mk") newFolder(S.cwd);
+          else if (m === "trash") openTrash();
+          else if (m === "empty") { S.hideEmpty = !S.hideEmpty; store.set("hideEmpty", S.hideEmpty); treeCache = null; B.flat = null; Promise.all([reload(), refreshB()]).then(function () { toast(S.hideEmpty ? "사진 없는 폴더를 숨겼어요" : "사진 없는 폴더도 보여요"); }); }
+          else if (m === "re") reload().then(refreshB);
+          else if (m === "perm") checkAccess(true);
+        };
+      });
     });
   };
 
   function openSort() {
     function draw2() {
-      var o = function (grp, key, val, label) { return '<button data-g="' + grp + '" data-v="' + val + '" class="' + (S[grp === "k" ? "sort" : "sort"][grp] === val ? "on" : "") + '">' + label + "</button>"; };
-      return '<h3>정렬 · 보기</h3><div class="body"><div class="opt"><span class="lbl">기준</span>' + o("k", "k", "name", "이름") + o("k", "k", "date", "날짜") + o("k", "k", "size", "크기") +
+      var o = function (grp, val, label) { return '<button data-g="' + grp + '" data-v="' + val + '" class="' + (S.sort[grp] === val ? "on" : "") + '">' + label + "</button>"; };
+      return '<div class="opt"><span class="lbl">정렬 기준</span>' + o("k", "name", "이름") + o("k", "date", "날짜") + o("k", "size", "크기") +
         '</div><div class="opt"><span class="lbl">방향</span><button data-g="d" data-v="1" class="' + (S.sort.d === 1 ? "on" : "") + '">오름차순</button><button data-g="d" data-v="-1" class="' + (S.sort.d === -1 ? "on" : "") + '">내림차순</button></div>' +
         '<div class="opt"><span class="lbl">한 줄 칸 수</span>' + [2, 3, 4, 5, 6].map(function (n) { return '<button data-g="c" data-v="' + n + '" class="' + (S.cols === n ? "on" : "") + '">' + n + "</button>"; }).join("") +
-        '</div><div class="opt"><span class="lbl">파일 이름</span><button data-g="n" data-v="1" class="' + (S.names ? "on" : "") + '">보이기</button><button data-g="n" data-v="0" class="' + (!S.names ? "on" : "") + '">숨기기</button></div></div><div class="btns"><button class="pri" data-done="1">닫기</button></div>';
+        '</div><div class="opt" style="margin-bottom:0"><span class="lbl">파일 이름</span><button data-g="n" data-v="1" class="' + (S.names ? "on" : "") + '">보이기</button><button data-g="n" data-v="0" class="' + (!S.names ? "on" : "") + '">숨기기</button></div>';
     }
-    sheet(draw2(), function (el, close) {
+    popMenu($("#btnSort"), draw2(), function (el) {
       function bind() {
         el.querySelectorAll("[data-g]").forEach(function (b) {
           b.onclick = function () {
@@ -293,17 +310,17 @@
             sortList(); draw(); el.innerHTML = draw2(); bind();
           };
         });
-        var d = el.querySelector("[data-done]"); if (d) d.onclick = function () { close(); };
       }
       bind();
     });
   }
+  $("#btnSort").onclick = openSort;
 
   /* ---------- 폴더 트리 (서랍 / 이동할 곳 고르기) ---------- */
   var treeCache = null;
   function loadTrees(force) {
     if (treeCache && !force) return Promise.resolve(treeCache);
-    return Promise.all(S.roots.map(function (r) { return FS.tree({ path: r.path, depth: 8 }).then(function (x) { x.tree.name = r.name; return x.tree; }); })).then(function (t) { treeCache = t; return t; });
+    return Promise.all(S.roots.map(function (r) { return FS.tree({ path: r.path, depth: 8 }).then(function (x) { x.tree.name = r.name; return S.hideEmpty ? prune2(x.tree) : x.tree; }); })).then(function (t) { treeCache = t; return t; });
   }
   function treeHtml(nodes, opts, depth) {
     return nodes.map(function (n) {
@@ -354,7 +371,7 @@
     return pickFolder(title, dis).then(function (r) {
       if (r && r.mk) {
         return askText("새 폴더 이름", "", "만들기").then(function (n) {
-          return (n ? FS.mkdir({ parent: r.mk, name: n }) : Promise.resolve()).then(function () { return pickLoop(title, dis); });
+          return (n ? FS.mkdir({ parent: r.mk, name: n }).then(function (m) { S.fresh.add(m.path); }) : Promise.resolve()).then(function () { return pickLoop(title, dis); });
         });
       }
       return r;
@@ -411,7 +428,7 @@
     if (parent == null) { toast("Pictures 같은 폴더 안으로 들어가서 만들어 주세요"); return; }
     askText("새 폴더 이름", "", "만들기").then(function (n) {
       if (!n) return;
-      return FS.mkdir({ parent: parent, name: n }).then(reload).then(function () { toast("폴더를 만들었어요"); });
+      return FS.mkdir({ parent: parent, name: n }).then(function (m) { S.fresh.add(m.path); return reload(); }).then(function () { return refreshB(); }).then(function () { toast("폴더를 만들었어요"); });
     }).catch(err);
   }
   $("#actions").addEventListener("click", function (e) {
@@ -434,8 +451,28 @@
     else confirmBox("영구 삭제", idl.length + "개를 완전히 지워요. 되돌릴 수 없어요.", "지우기", true).then(function (ok) { if (ok) return FS.purge({ ids: idl }).then(function () { clearSel(); openTrash(); }); }).catch(err);
   });
 
-  /* ---------- 크게 보기 ---------- */
-  var vList = [], vTok = 0;
+  /* ---------- 크게 보기 (더블탭·핀치 확대, 옆으로 넘기기) ---------- */
+  var vList = [], vTok = 0, Z = { s: 1, x: 0, y: 0, hi: false };
+  function zApply(anim) {
+    var im = $("#vImg"); im.classList.toggle("anim", !!anim);
+    im.style.transform = "translate3d(" + Z.x + "px," + Z.y + "px,0) scale(" + Z.s + ")";
+  }
+  function zReset() { Z.s = 1; Z.x = 0; Z.y = 0; Z.hi = false; zApply(false); }
+  function zClamp() {
+    var im = $("#vImg"), mx = Math.max(0, (im.clientWidth * Z.s - window.innerWidth) / 2), my = Math.max(0, (im.clientHeight * Z.s - window.innerHeight) / 2);
+    Z.x = Math.max(-mx, Math.min(mx, Z.x)); Z.y = Math.max(-my, Math.min(my, Z.y));
+    if (Z.s <= 1.001) { Z.x = 0; Z.y = 0; }
+  }
+  function zHi() {
+    if (Z.hi || Z.s <= 1.2) return; Z.hi = true;
+    var f = vList[S.viewer], tok = vTok; if (!f) return;
+    FS.thumb({ path: f.path, size: 3000 }).then(function (r) { if (tok === vTok && r && r.data) $("#vImg").src = r.data; }).catch(function () {});
+  }
+  function zToggle(cx, cy) {
+    if (Z.s > 1.05) { Z.s = 1; Z.x = 0; Z.y = 0; }
+    else { var px = cx - window.innerWidth / 2, py = cy - window.innerHeight / 2; Z.s = 2.6; Z.x = -(Z.s - 1) * px; Z.y = -(Z.s - 1) * py; zClamp(); zHi(); }
+    zApply(true);
+  }
   function openViewer(p) {
     vList = S.files.filter(function (f) { return !f.video; }); var i = vList.findIndex(function (f) { return f.path === p; });
     if (i < 0) { FS.openExternal({ path: p }).catch(err); return; }
@@ -443,18 +480,49 @@
   }
   function showV() {
     var f = vList[S.viewer]; if (!f) return;
+    zReset();
     $("#vName").textContent = f.name; $("#vPos").textContent = (S.viewer + 1) + " / " + vList.length;
-    var tok = ++vTok, im = $("#vImg"); im.style.opacity = .4;
+    var tok = ++vTok, im = $("#vImg"); im.style.opacity = 0.4;
     FS.thumb({ path: f.path, size: 1600 }).then(function (r) { if (tok === vTok) { im.src = r.data; im.style.opacity = 1; } }).catch(err);
   }
   function stepV(d) { var n = S.viewer + d; if (n < 0 || n >= vList.length) return; S.viewer = n; showV(); }
-  function closeV() { $("#viewer").hidden = true; S.viewer = null; $("#vImg").removeAttribute("src"); }
+  function closeV() { $("#viewer").hidden = true; S.viewer = null; $("#vImg").removeAttribute("src"); zReset(); }
   $("#vOpen").onclick = function () { var f = vList[S.viewer]; if (f) FS.openExternal({ path: f.path }).catch(err); };
   $("#vClose").onclick = closeV; $("#vPrev").onclick = function () { stepV(-1); }; $("#vNext").onclick = function () { stepV(1); };
   (function () {
-    var sx = null; var v = $("#viewer");
-    v.addEventListener("touchstart", function (e) { sx = e.touches.length === 1 ? e.touches[0].clientX : null; }, { passive: true });
-    v.addEventListener("touchend", function (e) { if (sx == null) return; var dx = e.changedTouches[0].clientX - sx; if (Math.abs(dx) > 60) stepV(dx < 0 ? 1 : -1); sx = null; });
+    var st = null, lastTap = 0, lastX = 0, lastY = 0, v = $("#viewer");
+    function dist(t) { return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY); }
+    v.addEventListener("touchstart", function (e) {
+      if (e.target.closest(".vtop, .vnav")) return;
+      if (e.touches.length === 2) { st = { mode: "pinch", d: dist(e.touches), s: Z.s }; return; }
+      if (e.touches.length === 1) st = { mode: "one", x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now(), px: Z.x, py: Z.y, moved: false };
+    }, { passive: true });
+    v.addEventListener("touchmove", function (e) {
+      if (!st) return;
+      if (st.mode === "pinch" && e.touches.length === 2) {
+        Z.s = Math.max(1, Math.min(6, st.s * dist(e.touches) / st.d)); zClamp(); zApply(false); return;
+      }
+      if (st.mode === "one" && e.touches.length === 1) {
+        var dx = e.touches[0].clientX - st.x, dy = e.touches[0].clientY - st.y;
+        if (Math.hypot(dx, dy) > 8) st.moved = true;
+        if (Z.s > 1.05) { Z.x = st.px + dx; Z.y = st.py + dy; zClamp(); zApply(false); }
+      }
+    }, { passive: true });
+    v.addEventListener("touchend", function (e) {
+      if (!st) return;
+      var s0 = st; if (e.touches.length) { if (s0.mode === "pinch") st = null; return; }
+      st = null;
+      if (s0.mode === "pinch") { zHi(); if (Z.s < 1.05) zReset(); return; }
+      var t = e.changedTouches[0], dx = t.clientX - s0.x, dy = t.clientY - s0.y, now = Date.now();
+      if (!s0.moved && now - s0.t < 350) {
+        if (now - lastTap < 320 && Math.hypot(t.clientX - lastX, t.clientY - lastY) < 40) { lastTap = 0; zToggle(t.clientX, t.clientY); }
+        else { lastTap = now; lastX = t.clientX; lastY = t.clientY; }
+        return;
+      }
+      if (Z.s <= 1.05 && Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) stepV(dx < 0 ? 1 : -1);
+      else if (Z.s > 1.05) zHi();
+    });
+    v.addEventListener("dblclick", function (e) { if (!e.target.closest(".vtop, .vnav")) zToggle(e.clientX, e.clientY); });
   })();
 
   /* ---------- 분할 화면: 위 = 정리할 사진, 아래 = 갈 곳(폴더) ---------- */
@@ -468,7 +536,9 @@
     document.body.classList.toggle("split", S.split);
     $("#btnSplit").classList.toggle("on", S.split);
     $("#scroll").style.flexGrow = S.split ? S.ratio : 1;
+    $("#card").style.flexGrow = S.ratio;
     $("#paneB").style.flexGrow = 1 - S.ratio;
+    document.body.classList.toggle("card", cardOn());
     if (S.split) {
       var start = S.cwd2 != null ? S.cwd2 : (S.cwd != null && rootOf(S.cwd) && rootOf(S.cwd).path !== S.cwd ? parentOf(S.cwd) : null);
       goB(start);
@@ -478,7 +548,7 @@
     if (!keep) { B.q = ""; $("#bQ").value = ""; $(".bh").classList.remove("search"); }
     if (path == null) { S.cwd2 = null; store.set("cwd2", null); B.list = S.roots.map(function (r) { return { name: r.name, path: r.path, root: true, media: 0, sub: 0 }; }); drawB(); return Promise.resolve(); }
     return FS.list({ path: path, foldersOnly: true }).then(function (r) {
-      S.cwd2 = path; store.set("cwd2", path); B.list = r.folders.sort(byName); drawB();
+      S.cwd2 = path; store.set("cwd2", path); B.list = r.folders.filter(vis).sort(byName); drawB();
       if (!keep) $("#bscroll").scrollTop = 0;
     }).catch(function (e) { err(e); if (S.cwd2 !== path) goB(null); });
   }
@@ -506,7 +576,8 @@
   }
   function bHint() {
     var h = $("#bHint");
-    if (S.sel.size) { h.textContent = "사진 " + S.sel.size + "장 · 폴더를 누르거나 끌어다 놓으면 옮겨져요"; h.classList.add("show"); }
+    if (cardOn()) { h.textContent = "지금 사진 → 폴더를 누르면 옮겨지고 다음 사진이 나와요"; h.classList.add("show"); }
+    else if (S.sel.size) { h.textContent = "사진 " + S.sel.size + "장 · 폴더를 누르거나 끌어다 놓으면 옮겨져요"; h.classList.add("show"); }
     else if (B.label) { h.textContent = B.label; h.classList.add("show"); }
     else h.classList.remove("show");
   }
@@ -538,6 +609,7 @@
   $("#crumbB").addEventListener("click", function (e) { var b = e.target.closest("[data-go]"); if (b) goB(b.dataset.go || null); });
   $("#bgrid").addEventListener("click", function (e) {
     var it = e.target.closest(".it"); if (!it) return; var p = it.dataset.p;
+    if (!e.target.closest(".go") && cardOn()) { cardMove(p); return; }
     if (!e.target.closest(".go") && S.sel.size && !S.trashView) { moveInto(selPaths(), p); return; }
     B.mode = "name"; store.set("bmode", "name"); goB(p);
   });
@@ -556,12 +628,76 @@
     g.addEventListener("pointermove", function (e) {
       if (!on) return; var r = $("#panes").getBoundingClientRect();
       var v = (e.clientY - r.top - 23) / Math.max(1, r.height - 46); S.ratio = Math.max(0.2, Math.min(0.8, v));
-      $("#scroll").style.flexGrow = S.ratio; $("#paneB").style.flexGrow = 1 - S.ratio;
+      $("#scroll").style.flexGrow = S.ratio; $("#card").style.flexGrow = S.ratio; $("#paneB").style.flexGrow = 1 - S.ratio;
     });
     ["pointerup", "pointercancel"].forEach(function (ev) { g.addEventListener(ev, function () { if (on) { on = false; store.set("ratio", S.ratio); } }); });
   })();
   var _paint = paintSel;
   paintSel = function () { _paint(); if (S.split) bHint(); };
+
+  /* ---------- 카드 모드: 사진 한 장씩, 위로 쓸면 삭제, 아래 폴더를 누르면 이동 ---------- */
+  function cardOn() { return !!(S.split && S.card && !S.trashView && S.cwd != null); }
+  function cardList() { return S.files.filter(function (f) { return !f.video; }); }
+  var cardTok = 0, cardCache = {};
+  function cardData(path) {
+    if (cardCache[path]) return Promise.resolve(cardCache[path]);
+    return FS.thumb({ path: path, size: 1400 }).then(function (r) {
+      var k = Object.keys(cardCache); if (k.length > 5) delete cardCache[k[0]];
+      cardCache[path] = r.data; return r.data;
+    });
+  }
+  function drawCard() {
+    document.body.classList.toggle("card", cardOn());
+    if (!cardOn()) return;
+    var l = cardList(), im = $("#cImg"), emp = $("#cEmpty");
+    if (S.ci >= l.length) S.ci = Math.max(0, l.length - 1);
+    var f = l[S.ci];
+    $("#cName").textContent = f ? f.name : "";
+    $("#cPos").textContent = f ? (S.ci + 1) + " / " + l.length : "";
+    emp.textContent = f ? "" : "이 폴더에는 사진이 없어요";
+    im.style.visibility = f ? "visible" : "hidden";
+    ["#cPrev", "#cDel", "#cOpen", "#cNext"].forEach(function (id) { $(id).disabled = !f; });
+    if (!f) { im.removeAttribute("src"); return; }
+    var tok = ++cardTok;
+    im.classList.remove("anim"); im.style.transform = ""; im.style.opacity = 1;
+    cardData(f.path).then(function (d) { if (tok === cardTok) im.src = d; }).catch(err);
+    var nx = l[S.ci + 1]; if (nx) cardData(nx.path).catch(function () {});
+  }
+  function cardStep(d) { var n = S.ci + d; if (n < 0 || n >= cardList().length) { toast(d > 0 ? "마지막 사진이에요" : "첫 사진이에요"); return; } S.ci = n; drawCard(); }
+  function cardMove(dest) { var f = cardList()[S.ci]; if (f) moveInto([f.path], dest); }
+  function cardDelete() {
+    var f = cardList()[S.ci]; if (!f) return;
+    FS.trash({ paths: [f.path] }).then(function (r) {
+      return reload().then(function () {
+        toast("‘" + f.name + "’을(를) 휴지통으로 보냈어요", "되돌리기", r.ids.length ? function () { FS.restore({ ids: r.ids }).then(reload).then(function () { toast("복원했어요"); }).catch(err); } : null);
+      });
+    }).catch(err);
+  }
+  $("#cPrev").onclick = function () { cardStep(-1); }; $("#cNext").onclick = function () { cardStep(1); };
+  $("#cDel").onclick = cardDelete;
+  $("#cOpen").onclick = function () { var f = cardList()[S.ci]; if (f) FS.openExternal({ path: f.path }).catch(err); };
+  $("#btnCard").onclick = function () {
+    if (S.cwd == null) { toast("폴더 안으로 들어가서 써 주세요"); return; }
+    S.card = !S.card; store.set("card", S.card); clearSel(); paintSel(); document.body.classList.toggle("card", cardOn()); if (cardOn()) drawCard(); drawB();
+  };
+  (function () {
+    var st = null, im = $("#cImg"), stage = $("#cStage");
+    stage.addEventListener("pointerdown", function (e) { if (!cardOn() || !cardList()[S.ci]) return; st = { x: e.clientX, y: e.clientY, dx: 0, dy: 0 }; stage.setPointerCapture(e.pointerId); im.classList.remove("anim"); });
+    stage.addEventListener("pointermove", function (e) {
+      if (!st) return; st.dx = e.clientX - st.x; st.dy = e.clientY - st.y;
+      var up = st.dy < 0 && Math.abs(st.dy) > Math.abs(st.dx);
+      im.style.transform = up ? "translate(" + (st.dx * 0.3) + "px," + st.dy + "px) scale(" + Math.max(0.7, 1 + st.dy / 600) + ")" : "translate(" + st.dx + "px,0) rotate(" + (st.dx / 40) + "deg)";
+      im.style.opacity = up ? Math.max(0.25, 1 + st.dy / 260) : Math.max(0.4, 1 - Math.abs(st.dx) / 500);
+    });
+    function end() {
+      if (!st) return; var d = st; st = null; im.classList.add("anim");
+      if (d.dy < -90 && Math.abs(d.dy) > Math.abs(d.dx)) { im.style.transform = "translate(0,-" + window.innerHeight + "px) scale(.6)"; im.style.opacity = 0; setTimeout(cardDelete, 180); }
+      else if (d.dx < -70 && Math.abs(d.dx) > Math.abs(d.dy)) { im.style.transform = "translate(-120%,0)"; im.style.opacity = 0; setTimeout(function () { var n = S.ci + 1; if (n < cardList().length) { S.ci = n; drawCard(); } else { toast("마지막 사진이에요"); drawCard(); } }, 150); }
+      else if (d.dx > 70 && Math.abs(d.dx) > Math.abs(d.dy)) { im.style.transform = "translate(120%,0)"; im.style.opacity = 0; setTimeout(function () { var n = S.ci - 1; if (n >= 0) { S.ci = n; drawCard(); } else { toast("첫 사진이에요"); drawCard(); } }, 150); }
+      else { im.style.transform = ""; im.style.opacity = 1; }
+    }
+    stage.addEventListener("pointerup", end); stage.addEventListener("pointercancel", end);
+  })();
 
   /* ---------- 권한 / 시작 ---------- */
   function checkAccess(manual) {
@@ -579,6 +715,7 @@
   document.addEventListener("visibilitychange", function () { if (!document.hidden && !$("#perm").hidden) checkAccess().then(function (g) { if (g) start(); }); });
 
   function back() {
+    if (!$("#pop").hidden) { closePop(); return true; }
     if (!$("#sheetWrap").hidden) { sheetClose && sheetClose(); return true; }
     if (!$("#viewer").hidden) { closeV(); return true; }
     if ($("#drawer").classList.contains("show")) { closeDrawer(); return true; }
