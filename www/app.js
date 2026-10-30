@@ -82,7 +82,7 @@
       S.cwd = path; S.folders = r.folders; S.files = r.files; sortList(); store.set("cwd", path); draw(); $("#scroll").scrollTop = 0;
     }).catch(function (e) { err(e); if (S.cwd !== path) go(null); });
   }
-  function reload() { return S.cwd == null ? go(null, true) : FS.list({ path: S.cwd }).then(function (r) { S.folders = r.folders; S.files = r.files; sortList(); prune(); draw(); }); }
+  function reload() { treeCache = null; B.flat = null; return S.cwd == null ? go(null, true) : FS.list({ path: S.cwd }).then(function (r) { S.folders = r.folders; S.files = r.files; sortList(); prune(); draw(); }); }
   function prune() { var ok = new Set(order().map(function (x) { return x.path; })); S.sel.forEach(function (p) { if (!ok.has(p)) S.sel.delete(p); }); if (!S.sel.size) S.selOn = false, S.range = false; }
 
   /* ---------- 그리기 ---------- */
@@ -98,18 +98,19 @@
       })(img);
     }
   }
+  function ioCallback(es) {
+    es.forEach(function (e) {
+      var im = e.target.querySelector("img"); if (!im) return;
+      if (e.isIntersecting) { if (im.dataset.state === "" || im.dataset.state === "x") { im.dataset.state = "q"; thumbQ.push(im); } }
+      else if (im.dataset.state === "d") { im.removeAttribute("src"); im.classList.remove("ok"); im.dataset.state = ""; }
+      else if (im.dataset.state === "q") im.dataset.state = "";
+    });
+    pump();
+  }
   function setupIO() {
     if (io) io.disconnect();
     thumbQ = [];
-    io = new IntersectionObserver(function (es) {
-      es.forEach(function (e) {
-        var im = e.target.querySelector("img"); if (!im) return;
-        if (e.isIntersecting) { if (im.dataset.state === "" || im.dataset.state === "x") { im.dataset.state = "q"; thumbQ.push(im); } }
-        else if (im.dataset.state === "d") { im.removeAttribute("src"); im.classList.remove("ok"); im.dataset.state = ""; }
-        else if (im.dataset.state === "q") im.dataset.state = "";
-      });
-      pump();
-    }, { root: $("#scroll"), rootMargin: "700px 0px" });
+    io = new IntersectionObserver(ioCallback, { root: $("#scroll"), rootMargin: "700px 0px" });
   }
   function itemHtml(x, isFolder) {
     var on = S.sel.has(x.path) ? " on" : "", anc = S.anchor === x.path ? " anchor" : "";
@@ -192,20 +193,60 @@
   }
   function startSel(p) { S.selOn = true; S.sel.add(p); S.last = p; if (navigator.vibrate) try { navigator.vibrate(12); } catch (e) {} paintSel(); }
 
-  /* 누르기 / 꾹 누르기 */
-  var press = null, suppress = false;
-  var grid = $("#grid");
+  /* 누르기 / 꾹 누르기 / 끌어서 폴더에 놓기 */
+  var press = null, suppress = false, drag = null, auto = 0, autoEl = null, raf = 0;
+  var grid = $("#grid"), ghost = $("#ghost");
   grid.addEventListener("pointerdown", function (e) {
     var it = e.target.closest(".it"); if (!it) return;
     press = { it: it, x: e.clientX, y: e.clientY, t: setTimeout(function () {
       if (!press) return; suppress = true;
-      var p = it.dataset.p;
+      var p = it.dataset.p, px = press.x, py = press.y;
       if (!S.selOn) startSel(p); else if (!S.sel.has(p)) toggle(p);
+      if (!S.trashView && S.sel.size) drag = { x: px, y: py, on: false, target: null };
       press = null;
     }, 380) };
   });
   grid.addEventListener("pointermove", function (e) { if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 9) { clearTimeout(press.t); press = null; } });
   ["pointerup", "pointercancel", "pointerleave"].forEach(function (ev) { grid.addEventListener(ev, function () { if (press) { clearTimeout(press.t); press = null; } }); });
+  function dropAt(x, y) {
+    var el = document.elementFromPoint(x, y); if (!el) return null;
+    var t = el.closest(".it.folder");
+    if (t && t.dataset.p && !S.sel.has(t.dataset.p)) return { el: t, path: t.dataset.p };
+    var c = el.closest("#crumb [data-go], #crumbB [data-go]");
+    if (c && c.dataset.go) return { el: c, path: c.dataset.go };
+    return null;
+  }
+  function autoLoop() { if (!drag || !drag.on) { raf = 0; return; } if (auto && autoEl) autoEl.scrollTop += auto; raf = requestAnimationFrame(autoLoop); }
+  function dragEnd(drop) {
+    var d = drag; drag = null; auto = 0; ghost.style.display = "none"; document.body.classList.remove("dragging");
+    document.querySelectorAll(".drop").forEach(function (n) { n.classList.remove("drop"); });
+    if (suppress) setTimeout(function () { suppress = false; }, 350);
+    if (d && d.on && drop && d.target) moveInto(selPaths(), d.target.path);
+  }
+  window.addEventListener("pointermove", function (e) {
+    if (!drag) return;
+    if (!drag.on) {
+      if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 10) return;
+      drag.on = true; document.body.classList.add("dragging");
+      var first = S.sel.size ? document.querySelector('#grid .it.on img.ok') : null;
+      ghost.innerHTML = "<b>" + S.sel.size + "</b>";
+      ghost.style.backgroundImage = first && first.src ? 'url("' + first.src + '")' : "none";
+      ghost.style.display = "block";
+      if (navigator.vibrate) try { navigator.vibrate(10); } catch (x) {}
+      if (!raf) raf = requestAnimationFrame(autoLoop);
+    }
+    ghost.style.left = e.clientX + "px"; ghost.style.top = e.clientY + "px";
+    var t = dropAt(e.clientX, e.clientY);
+    document.querySelectorAll(".drop").forEach(function (n) { if (!t || n !== t.el) n.classList.remove("drop"); });
+    if (t) t.el.classList.add("drop");
+    drag.target = t;
+    var el = document.elementFromPoint(e.clientX, e.clientY), sc = el && el.closest("#scroll, #bscroll");
+    auto = 0; autoEl = sc;
+    if (sc) { var r = sc.getBoundingClientRect(); if (e.clientY < r.top + 56) auto = -12; else if (e.clientY > r.bottom - 56) auto = 12; }
+  });
+  window.addEventListener("pointerup", function () { if (drag) dragEnd(true); });
+  window.addEventListener("pointercancel", function () { if (drag) dragEnd(false); });
+  document.addEventListener("touchmove", function (e) { if (drag) e.preventDefault(); }, { passive: false });
   grid.addEventListener("contextmenu", function (e) { e.preventDefault(); });
   grid.addEventListener("click", function (e) {
     var it = e.target.closest(".it"); if (!it) return;
@@ -322,25 +363,30 @@
 
   /* ---------- 동작: 이동 / 삭제 / 이름 / 새 폴더 ---------- */
   function selPaths() { return Array.from(S.sel); }
+  function noteRecent(dest) {
+    B.recent = [dest].concat(B.recent.filter(function (p) { return p !== dest; })).slice(0, 24); store.set("recent", B.recent);
+  }
+  function moveInto(paths, dest) {
+    if (!paths.length) return Promise.resolve();
+    return FS.move({ paths: paths, dest: dest }).then(function (r) {
+      clearSel(); noteRecent(dest);
+      return Promise.all([reload(), refreshB()]).then(function () {
+        var n = r.moved.length, bad = r.failed.length;
+        toast(n ? n + "개를 ‘" + nameOf(dest) + "’(으)로 옮겼어요" + (bad ? " (실패 " + bad + ")" : "") : (bad ? r.failed[0].error : "이미 그 폴더에 있어요"), "되돌리기", n ? function () { undoMove(r.moved); } : null);
+      });
+    }).catch(err);
+  }
   function doMove() {
     var paths = selPaths(); if (!paths.length) return;
     var folders = paths.filter(function (p) { return S.folders.some(function (f) { return f.path === p; }); });
     pickLoop(paths.length + "개를 어디로 옮길까요?", function (p) {
       if (p === S.cwd) return true;
       return folders.some(function (f) { return p === f || p.indexOf(f + "/") === 0; });
-    }).then(function (dest) {
-      if (!dest) return;
-      return FS.move({ paths: paths, dest: dest }).then(function (r) {
-        clearSel(); return reload().then(function () {
-          var n = r.moved.length, bad = r.failed.length;
-          toast(n + "개를 ‘" + nameOf(dest) + "’(으)로 옮겼어요" + (bad ? " (실패 " + bad + ")" : ""), "되돌리기", n ? function () { undoMove(r.moved); } : null);
-        });
-      });
-    }).catch(err);
+    }).then(function (dest) { if (dest) return moveInto(paths, dest); }).catch(err);
   }
   function undoMove(moved) {
     var by = {}; moved.forEach(function (m) { var d = parentOf(m.from); (by[d] = by[d] || []).push(m.to); });
-    Promise.all(Object.keys(by).map(function (d) { return FS.move({ paths: by[d], dest: d }); })).then(reload).then(function () { toast("되돌렸어요"); }).catch(err);
+    Promise.all(Object.keys(by).map(function (d) { return FS.move({ paths: by[d], dest: d }); })).then(function () { return Promise.all([reload(), refreshB()]); }).then(function () { toast("되돌렸어요"); }).catch(err);
   }
   function doTrash() {
     var paths = selPaths(); if (!paths.length) return;
@@ -392,7 +438,7 @@
   var vList = [], vTok = 0;
   function openViewer(p) {
     vList = S.files.filter(function (f) { return !f.video; }); var i = vList.findIndex(function (f) { return f.path === p; });
-    if (i < 0) { toast("영상은 갤러리 앱에서 열어 주세요"); return; }
+    if (i < 0) { FS.openExternal({ path: p }).catch(err); return; }
     S.viewer = i; $("#viewer").hidden = false; showV();
   }
   function showV() {
@@ -403,12 +449,119 @@
   }
   function stepV(d) { var n = S.viewer + d; if (n < 0 || n >= vList.length) return; S.viewer = n; showV(); }
   function closeV() { $("#viewer").hidden = true; S.viewer = null; $("#vImg").removeAttribute("src"); }
+  $("#vOpen").onclick = function () { var f = vList[S.viewer]; if (f) FS.openExternal({ path: f.path }).catch(err); };
   $("#vClose").onclick = closeV; $("#vPrev").onclick = function () { stepV(-1); }; $("#vNext").onclick = function () { stepV(1); };
   (function () {
     var sx = null; var v = $("#viewer");
     v.addEventListener("touchstart", function (e) { sx = e.touches.length === 1 ? e.touches[0].clientX : null; }, { passive: true });
     v.addEventListener("touchend", function (e) { if (sx == null) return; var dx = e.changedTouches[0].clientX - sx; if (Math.abs(dx) > 60) stepV(dx < 0 ? 1 : -1); sx = null; });
   })();
+
+  /* ---------- 분할 화면: 위 = 정리할 사진, 아래 = 갈 곳(폴더) ---------- */
+  var B = { list: [], q: "", mode: store.get("bmode", "name"), recent: store.get("recent", []), flat: null };
+  S.split = store.get("split", false); S.ratio = store.get("ratio", 0.5); S.cwd2 = store.get("cwd2", null);
+  var CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
+  function cho(str) { return Array.from(str).map(function (c) { var k = c.charCodeAt(0) - 0xAC00; return k >= 0 && k < 11172 ? CHO[Math.floor(k / 588)] : c.toLowerCase(); }).join(""); }
+  function byName(a, b) { return a.name.localeCompare(b.name, "ko", { numeric: true }); }
+  var ioB = null;
+  function applySplit() {
+    document.body.classList.toggle("split", S.split);
+    $("#btnSplit").classList.toggle("on", S.split);
+    $("#scroll").style.flexGrow = S.split ? S.ratio : 1;
+    $("#paneB").style.flexGrow = 1 - S.ratio;
+    if (S.split) {
+      var start = S.cwd2 != null ? S.cwd2 : (S.cwd != null && rootOf(S.cwd) && rootOf(S.cwd).path !== S.cwd ? parentOf(S.cwd) : null);
+      goB(start);
+    }
+  }
+  function goB(path, keep) {
+    if (!keep) { B.q = ""; $("#bQ").value = ""; $(".bh").classList.remove("search"); }
+    if (path == null) { S.cwd2 = null; store.set("cwd2", null); B.list = S.roots.map(function (r) { return { name: r.name, path: r.path, root: true, media: 0, sub: 0 }; }); drawB(); return Promise.resolve(); }
+    return FS.list({ path: path, foldersOnly: true }).then(function (r) {
+      S.cwd2 = path; store.set("cwd2", path); B.list = r.folders.sort(byName); drawB();
+      if (!keep) $("#bscroll").scrollTop = 0;
+    }).catch(function (e) { err(e); if (S.cwd2 !== path) goB(null); });
+  }
+  function refreshB() { return S.split ? goB(S.cwd2, true) : Promise.resolve(); }
+  function relPath(p) { var r = rootOf(p); return (r ? r.name + p.slice(r.path.length) : p).split("/").join(" › "); }
+  function ensureFlat() {
+    if (B.flat) return Promise.resolve(B.flat);
+    return loadTrees(false).then(function (trees) {
+      var out = [];
+      function w(n, rel) { out.push({ name: n.name, path: n.path, parent: rel, media: -1, sub: 0 }); (n.kids || []).forEach(function (k) { w(k, rel ? rel + " › " + n.name : n.name); }); }
+      trees.forEach(function (t) { w(t, ""); });
+      B.flat = out.filter(function (x) { return x.parent !== ""; }); return B.flat;
+    });
+  }
+  function searchList(q) {
+    var l = q.toLowerCase(), jamo = /^[ㄱ-ㅎ]+$/.test(q);
+    var hit = (B.flat || []).filter(function (x) { return jamo ? cho(x.name).indexOf(q) >= 0 : x.name.toLowerCase().indexOf(l) >= 0 || cho(x.name).indexOf(l) === 0 && /^[ㄱ-ㅎ]/.test(l); });
+    hit.sort(function (a, b) { var as = a.name.toLowerCase().indexOf(l) === 0 ? 0 : 1, bs = b.name.toLowerCase().indexOf(l) === 0 ? 0 : 1; return as - bs || byName(a, b); });
+    return hit.slice(0, 80);
+  }
+  function btHtml(x) {
+    var meta = x.parent != null ? x.parent : (x.root ? "" : (x.media > 0 ? x.media + "장" : "") + (x.media > 0 && x.sub ? " · " : "") + (x.sub ? "폴더 " + x.sub : ""));
+    return '<div class="it folder bt' + (x.cover ? " hascover" : "") + '" data-p="' + esc(x.path) + '" data-f="1"><div class="th">' + (x.cover ? '<img data-p="' + esc(x.cover) + '" data-state="" alt="">' : "") + FOLDER_SVG +
+      '<span class="go" data-go="1">›</span></div><div class="lb">' + esc(x.name) + (meta ? "<small>" + esc(meta) + "</small>" : "") + "</div></div>";
+  }
+  function bHint() {
+    var h = $("#bHint");
+    if (S.sel.size) { h.textContent = "사진 " + S.sel.size + "장 · 폴더를 누르거나 끌어다 놓으면 옮겨져요"; h.classList.add("show"); }
+    else if (B.label) { h.textContent = B.label; h.classList.add("show"); }
+    else h.classList.remove("show");
+  }
+  function drawB() {
+    if (!S.split) return;
+    var html = '<button data-go="">홈</button>';
+    if (S.cwd2 != null) {
+      var r = rootOf(S.cwd2);
+      if (r) {
+        html += '<i>›</i><button data-go="' + esc(r.path) + '">' + esc(r.name) + "</button>";
+        var rest = S.cwd2.slice(r.path.length + 1), acc = r.path;
+        if (rest) rest.split("/").forEach(function (seg) { acc += "/" + seg; html += '<i>›</i><button data-go="' + esc(acc) + '">' + esc(seg) + "</button>"; });
+      }
+    }
+    var cb = $("#crumbB"); cb.innerHTML = html; cb.scrollLeft = cb.scrollWidth;
+    var q = B.q.trim(), items, label = "";
+    if (q) { items = searchList(q); label = "검색 결과"; }
+    else if (B.mode === "recent") { items = B.recent.map(function (p) { return { name: nameOf(p), path: p, parent: relPath(parentOf(p)) }; }); label = "최근에 옮긴 폴더"; }
+    else items = B.list;
+    $("#bSort").textContent = B.mode === "recent" ? "최근" : "이름순";
+    $("#bgrid").innerHTML = items.map(btHtml).join("");
+    $("#bempty").textContent = items.length ? "" : (q ? "맞는 폴더가 없어요" : B.mode === "recent" ? "아직 옮긴 폴더가 없어요" : "하위 폴더가 없어요");
+    B.label = label; bHint();
+    if (ioB) ioB.disconnect();
+    ioB = new IntersectionObserver(ioCallback, { root: $("#bscroll"), rootMargin: "500px 0px" });
+    $("#bgrid").querySelectorAll(".it").forEach(function (n) { ioB.observe(n); });
+  }
+  $("#btnSplit").onclick = function () { S.split = !S.split; store.set("split", S.split); applySplit(); };
+  $("#crumbB").addEventListener("click", function (e) { var b = e.target.closest("[data-go]"); if (b) goB(b.dataset.go || null); });
+  $("#bgrid").addEventListener("click", function (e) {
+    var it = e.target.closest(".it"); if (!it) return; var p = it.dataset.p;
+    if (!e.target.closest(".go") && S.sel.size && !S.trashView) { moveInto(selPaths(), p); return; }
+    B.mode = "name"; store.set("bmode", "name"); goB(p);
+  });
+  $("#bSort").onclick = function () { B.mode = B.mode === "recent" ? "name" : "recent"; store.set("bmode", B.mode); B.q = ""; $("#bQ").value = ""; $(".bh").classList.remove("search"); drawB(); };
+  function closeSearch() { B.q = ""; $("#bQ").value = ""; $(".bh").classList.remove("search"); drawB(); }
+  $("#bFind").onclick = function () {
+    var bh = $(".bh");
+    if (bh.classList.contains("search")) { closeSearch(); return; }
+    bh.classList.add("search"); ensureFlat().then(function () { drawB(); }).catch(err); setTimeout(function () { $("#bQ").focus(); }, 30);
+  };
+  $("#bQ").addEventListener("input", function () { B.q = this.value; ensureFlat().then(drawB).catch(err); });
+  $("#bQ").addEventListener("keydown", function (e) { if (e.key === "Enter") this.blur(); });
+  (function () {
+    var on = false, g = $("#grip");
+    g.addEventListener("pointerdown", function (e) { on = true; g.setPointerCapture(e.pointerId); e.preventDefault(); });
+    g.addEventListener("pointermove", function (e) {
+      if (!on) return; var r = $("#panes").getBoundingClientRect();
+      var v = (e.clientY - r.top - 23) / Math.max(1, r.height - 46); S.ratio = Math.max(0.2, Math.min(0.8, v));
+      $("#scroll").style.flexGrow = S.ratio; $("#paneB").style.flexGrow = 1 - S.ratio;
+    });
+    ["pointerup", "pointercancel"].forEach(function (ev) { g.addEventListener(ev, function () { if (on) { on = false; store.set("ratio", S.ratio); } }); });
+  })();
+  var _paint = paintSel;
+  paintSel = function () { _paint(); if (S.split) bHint(); };
 
   /* ---------- 권한 / 시작 ---------- */
   function checkAccess(manual) {
@@ -429,6 +582,7 @@
     if (!$("#sheetWrap").hidden) { sheetClose && sheetClose(); return true; }
     if (!$("#viewer").hidden) { closeV(); return true; }
     if ($("#drawer").classList.contains("show")) { closeDrawer(); return true; }
+    if ($(".bh").classList.contains("search")) { closeSearch(); return true; }
     if (S.selOn || S.sel.size) { clearSel(); paintSel(); return true; }
     if (S.trashView) { go(S.cwd); return true; }
     if (S.cwd != null) { var r = rootOf(S.cwd); go(r && r.path === S.cwd ? null : parentOf(S.cwd)); return true; }
@@ -443,7 +597,7 @@
     FS.roots().then(function (r) {
       S.home = r.home; S.roots = r.roots;
       var last = store.get("cwd", null);
-      return go(last && rootOf(last) ? last : null);
+      return go(last && rootOf(last) ? last : null).then(applySplit);
     }).catch(function (e) { diag("시작 실패: " + ((e && e.message) || e)); });
   }
   checkAccess().then(function (g) { if (g) start(); });

@@ -3,6 +3,10 @@ package com.jjam.photo;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.provider.MediaStore;
+import android.webkit.MimeTypeMap;
+import androidx.core.content.FileProvider;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
@@ -209,6 +213,7 @@ public class PhotoFsPlugin extends Plugin {
         pool.execute(() -> {
             try {
                 File dir = safe(call.getString("path"));
+                boolean foldersOnly = Boolean.TRUE.equals(call.getBoolean("foldersOnly", false));
                 File[] kids = dir.listFiles();
                 JSArray folders = new JSArray(), files = new JSArray();
                 if (kids != null) {
@@ -221,15 +226,18 @@ public class PhotoFsPlugin extends Plugin {
                         o.put("mtime", k.lastModified());
                         if (k.isDirectory()) {
                             int media = 0, sub = 0;
+                            String cover = null;
                             File[] in = k.listFiles();
                             if (in != null) for (File c : in) {
                                 if (c.getName().startsWith(".")) continue;
-                                if (c.isDirectory()) sub++; else if (isMedia(c.getName())) media++;
+                                if (c.isDirectory()) sub++;
+                                else if (isMedia(c.getName())) { media++; if (cover == null && !VID.contains(ext(c.getName()))) cover = c.getPath(); }
                             }
+                            if (cover != null) o.put("cover", cover);
                             o.put("media", media);
                             o.put("sub", sub);
                             folders.put(o);
-                        } else if (isMedia(n)) {
+                        } else if (!foldersOnly && isMedia(n)) {
                             o.put("size", k.length());
                             o.put("video", VID.contains(ext(n)));
                             files.put(o);
@@ -278,6 +286,42 @@ public class PhotoFsPlugin extends Plugin {
         }
         o.put("kids", kids);
         return o;
+    }
+
+    /* ---------- 기본 갤러리(다른 앱)로 열기 ---------- */
+    @PluginMethod
+    public void openExternal(final PluginCall call) {
+        try {
+            File f = safe(call.getString("path"));
+            if (!f.isFile()) throw new Exception("파일이 없어요");
+            String ex = ext(f.getName());
+            boolean vid = VID.contains(ex);
+            String mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ex);
+            if (mime == null) mime = vid ? "video/*" : "image/*";
+            Uri uri = mediaUri(f, vid);
+            if (uri == null) uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", f);
+            Intent i = new Intent(Intent.ACTION_VIEW);
+            i.setDataAndType(uri, mime);
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(i);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("열지 못했어요: " + e.getMessage());
+        }
+    }
+
+    /** 갤러리 앱이 앨범 맥락으로 열 수 있게 MediaStore 주소를 먼저 찾아 봄 */
+    private Uri mediaUri(File f, boolean video) {
+        Cursor c = null;
+        try {
+            Uri base = video ? MediaStore.Video.Media.EXTERNAL_CONTENT_URI : MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+            c = getContext().getContentResolver().query(base, new String[]{MediaStore.MediaColumns._ID}, MediaStore.MediaColumns.DATA + "=?", new String[]{f.getPath()}, null);
+            if (c != null && c.moveToFirst()) return Uri.withAppendedPath(base, String.valueOf(c.getLong(0)));
+        } catch (Exception ignore) {
+        } finally {
+            if (c != null) c.close();
+        }
+        return null;
     }
 
     /* ---------- 썸네일 / 미리보기 ---------- */

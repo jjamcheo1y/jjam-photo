@@ -39,6 +39,7 @@ function MockFS() {
   }
   function pathNode(p) { if (p.indexOf("/.jjamtrash/") > 0) { var id = p.split("/")[p.split("/").length - 2]; var t = trash.filter(function (x) { return x.id === id; })[0]; return t && t.node; } return node(p); }
   return {
+    openExternal: function (o) { window.__opened = o.path; return wait({}); },
     hasAccess: function () { return wait({ granted: true }); },
     requestAccess: function () { return wait({}); },
     roots: function () { return wait({ home: HOME, roots: ["DCIM", "Pictures", "Download"].map(function (n) { return { name: n, path: HOME + "/" + n }; }) }); },
@@ -47,8 +48,8 @@ function MockFS() {
       var fo = [], fi = [];
       n.kids.forEach(function (k) {
         var p = o.path + "/" + k.name;
-        if (k.dir) fo.push({ name: k.name, path: p, mtime: k.mtime, media: k.kids.filter(function (c) { return !c.dir; }).length, sub: k.kids.filter(function (c) { return c.dir; }).length });
-        else fi.push({ name: k.name, path: p, mtime: k.mtime, size: k.size, video: k.video });
+        if (k.dir) { var f1 = k.kids.filter(function (c) { return !c.dir && !c.video; })[0]; fo.push({ name: k.name, path: p, mtime: k.mtime, media: k.kids.filter(function (c) { return !c.dir; }).length, sub: k.kids.filter(function (c) { return c.dir; }).length, cover: f1 ? p + "/" + f1.name : undefined }); }
+        else if (!o.foldersOnly) fi.push({ name: k.name, path: p, mtime: k.mtime, size: k.size, video: k.video });
       });
       return wait({ folders: fo, files: fi });
     },

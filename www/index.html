@@ -21,6 +21,7 @@ window.addEventListener("unhandledrejection", function (e) { var r = e.reason; w
     <div class="row main">
       <button class="ib" id="btnTree" aria-label="폴더 트리"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
       <nav id="crumb"></nav>
+      <button class="ib" id="btnSplit" aria-label="분할 화면"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16"/></svg></button>
       <button class="ib" id="btnSort" aria-label="정렬"><svg viewBox="0 0 24 24"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/></svg></button>
       <button class="ib" id="btnMore" aria-label="더 보기"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></button>
     </div>
@@ -33,12 +34,27 @@ window.addEventListener("unhandledrejection", function (e) { var r = e.reason; w
     </div>
   </header>
   <div id="hint"></div>
-  <main id="scroll"><div id="grid"></div><div id="empty" hidden></div></main>
-  <footer id="actions">
-    <button class="act" data-a="move">이동</button>
-    <button class="act" data-a="rename">이름 바꾸기</button>
-    <button class="act danger" data-a="trash">삭제</button>
-  </footer>
+  <div id="panes">
+    <main id="scroll" class="pane"><div id="grid"></div><div id="empty" hidden></div></main>
+    <div id="mid">
+      <div id="grip" aria-label="칸 크기 조절"><svg viewBox="0 0 24 24"><path d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg></div>
+      <footer id="actions">
+        <button class="act" data-a="move">이동</button>
+        <button class="act" data-a="rename">이름 바꾸기</button>
+        <button class="act danger" data-a="trash">삭제</button>
+      </footer>
+    </div>
+    <section id="paneB">
+      <div class="bh">
+        <nav id="crumbB"></nav>
+        <input id="bQ" type="search" placeholder="폴더 검색 (ㅊㅅ 같은 초성도 돼요)" autocomplete="off">
+        <button class="ib sm" id="bFind" aria-label="폴더 검색"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" style="fill:none;stroke:currentColor;stroke-width:2"/><path d="M16 16l4 4"/></svg></button>
+        <button class="pill" id="bSort">이름순</button>
+      </div>
+      <div id="bHint"></div>
+      <div id="bscroll" class="pane"><div id="bgrid"></div><div id="bempty"></div></div>
+    </section>
+  </div>
   <footer id="tactions">
     <button class="act" data-a="restore">복원</button>
     <button class="act danger" data-a="purge">영구 삭제</button>
@@ -49,7 +65,7 @@ window.addEventListener("unhandledrejection", function (e) { var r = e.reason; w
 <div id="scrim"></div>
 
 <div id="viewer" hidden>
-  <div class="vtop"><button class="ib" id="vClose"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span id="vName"></span><span id="vPos"></span></div>
+  <div class="vtop"><button class="ib" id="vClose"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span id="vName"></span><span id="vPos"></span><button class="ib" id="vOpen" aria-label="갤러리에서 열기"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button></div>
   <div id="vStage"><img id="vImg" alt=""></div>
   <button class="vnav l" id="vPrev">‹</button><button class="vnav r" id="vNext">›</button>
 </div>
@@ -64,6 +80,7 @@ window.addEventListener("unhandledrejection", function (e) { var r = e.reason; w
   </div>
 </div>
 <div id="toast"></div>
+<div id="ghost"></div>
 <script src="capacitor.js"></script>
 <script src="mock.js"></script>
 <script src="app.js"></script>
