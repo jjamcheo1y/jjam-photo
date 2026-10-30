@@ -19,7 +19,7 @@
     home: "", roots: [], cwd: null, folders: [], files: [],
     sort: store.get("sort", { k: "date", d: -1 }), cols: store.get("cols", 3), names: store.get("names", true),
     sel: new Set(), selOn: false, range: false, anchor: null, last: null,
-    trashView: false, trash: [], viewer: null, hideEmpty: store.get("hideEmpty", true), fresh: new Set(), card: store.get("card", false), ci: 0
+    trashView: false, trash: [], viewer: null, hideEmpty: store.get("hideEmpty", true), autoMax: store.get("autoMax", 4), fresh: new Set(), card: store.get("card", false), ci: 0
   };
 
   /* ---------- 알림 / 창 ---------- */
@@ -30,6 +30,11 @@
     if (fn) $("button", t).onclick = function () { t.classList.remove("show"); fn(); };
     tt = setTimeout(function () { t.classList.remove("show"); }, fn ? 7000 : 2400);
   }
+  /* 직전 작업 되돌리기 (최근 20개) */
+  var UNDO = [];
+  function paintUndo() { var b = $("#btnUndo"), l = UNDO[UNDO.length - 1]; b.hidden = !l; if (l) b.title = "되돌리기: " + l.label; }
+  function pushUndo(label, fn) { var u = { label: label, fn: fn, done: false }; UNDO.push(u); if (UNDO.length > 20) UNDO.shift(); paintUndo(); return u; }
+  function runUndo(u) { if (!u || u.done) return Promise.resolve(); u.done = true; UNDO = UNDO.filter(function (x) { return x !== u; }); paintUndo(); return Promise.resolve(u.fn()).catch(err); }
   var sheetClose = null;
   function sheet(html, onOpen) {
     return new Promise(function (res) {
@@ -246,7 +251,11 @@
     drag.target = t;
     var el = document.elementFromPoint(e.clientX, e.clientY), sc = el && el.closest("#scroll, #bscroll");
     auto = 0; autoEl = sc;
-    if (sc) { var r = sc.getBoundingClientRect(); if (e.clientY < r.top + 56) auto = -12; else if (e.clientY > r.bottom - 56) auto = 12; }
+    if (sc) {
+      var r = sc.getBoundingClientRect(), Zn = 90, mx = S.autoMax;
+      if (e.clientY < r.top + Zn) auto = -Math.max(0.6, mx * Math.min(1, (r.top + Zn - e.clientY) / Zn));
+      else if (e.clientY > r.bottom - Zn) auto = Math.max(0.6, mx * Math.min(1, (e.clientY - (r.bottom - Zn)) / Zn));
+    }
   });
   window.addEventListener("pointerup", function () { if (drag) dragEnd(true); });
   window.addEventListener("pointercancel", function () { if (drag) dragEnd(false); });
@@ -273,10 +282,27 @@
   function popMenu(anchor, html, bind) {
     var pop = $("#pop"); pop.innerHTML = html; pop.hidden = false; $("#popScrim").hidden = false;
     var r = anchor.getBoundingClientRect();
-    pop.style.top = (r.bottom + 6) + "px"; pop.style.right = Math.max(8, window.innerWidth - r.right) + "px";
+    pop.style.left = "auto"; pop.style.top = (r.bottom + 6) + "px"; pop.style.right = Math.max(8, window.innerWidth - r.right) + "px";
     bind && bind(pop);
   }
+  function popAt(x, y, html, bind) {
+    var pop = $("#pop"); pop.innerHTML = html; pop.hidden = false; $("#popScrim").hidden = false;
+    pop.style.right = "auto"; pop.style.left = "0px"; pop.style.top = "0px";
+    var w = pop.offsetWidth, h = pop.offsetHeight;
+    pop.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + "px"; pop.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + "px";
+    bind && bind(pop);
+  }
+  function longPress(el, ms, pick, fire) {
+    var t = null, sx = 0, sy = 0;
+    el.addEventListener("pointerdown", function (e) {
+      var c = pick(e); if (!c) return; sx = e.clientX; sy = e.clientY; clearTimeout(t);
+      t = setTimeout(function () { t = null; fire(sx, sy, c); }, ms);
+    });
+    el.addEventListener("pointermove", function (e) { if (t && Math.hypot(e.clientX - sx, e.clientY - sy) > 9) { clearTimeout(t); t = null; } });
+    ["pointerup", "pointercancel", "pointerleave"].forEach(function (ev) { el.addEventListener(ev, function () { if (t) { clearTimeout(t); t = null; } }); });
+  }
   $("#popScrim").onclick = closePop;
+  $("#btnUndo").onclick = function () { var u = UNDO[UNDO.length - 1]; if (u) runUndo(u); };
   $("#btnMore").onclick = function () {
     popMenu(this, '<button class="mi" data-m="mk">＋ 새 폴더 만들기</button><button class="mi" data-m="trash">휴지통 보기</button><button class="mi' + (S.hideEmpty ? " on" : "") + '" data-m="empty">사진 없는 폴더 숨기기</button><button class="mi" data-m="re">새로고침</button><button class="mi" data-m="perm">파일 접근 권한 확인</button>', function (el) {
       el.querySelectorAll("[data-m]").forEach(function (b) {
@@ -298,7 +324,8 @@
       return '<div class="opt"><span class="lbl">정렬 기준</span>' + o("k", "name", "이름") + o("k", "date", "날짜") + o("k", "size", "크기") +
         '</div><div class="opt"><span class="lbl">방향</span><button data-g="d" data-v="1" class="' + (S.sort.d === 1 ? "on" : "") + '">오름차순</button><button data-g="d" data-v="-1" class="' + (S.sort.d === -1 ? "on" : "") + '">내림차순</button></div>' +
         '<div class="opt"><span class="lbl">한 줄 칸 수</span>' + [2, 3, 4, 5, 6].map(function (n) { return '<button data-g="c" data-v="' + n + '" class="' + (S.cols === n ? "on" : "") + '">' + n + "</button>"; }).join("") +
-        '</div><div class="opt" style="margin-bottom:0"><span class="lbl">파일 이름</span><button data-g="n" data-v="1" class="' + (S.names ? "on" : "") + '">보이기</button><button data-g="n" data-v="0" class="' + (!S.names ? "on" : "") + '">숨기기</button></div>';
+        '</div><div class="opt"><span class="lbl">파일 이름</span><button data-g="n" data-v="1" class="' + (S.names ? "on" : "") + '">보이기</button><button data-g="n" data-v="0" class="' + (!S.names ? "on" : "") + '">숨기기</button></div>' +
+        '<div class="opt" style="margin-bottom:0"><span class="lbl">끌 때 가장자리 스크롤 속도 <b id="amv">' + S.autoMax + '</b></span><input type="range" id="amr" min="1" max="14" step="1" value="' + S.autoMax + '" style="width:100%"></div>';
     }
     popMenu($("#btnSort"), draw2(), function (el) {
       function bind() {
@@ -310,6 +337,8 @@
             sortList(); draw(); el.innerHTML = draw2(); bind();
           };
         });
+        var rg = el.querySelector("#amr");
+        if (rg) rg.oninput = function () { S.autoMax = +rg.value; store.set("autoMax", S.autoMax); el.querySelector("#amv").textContent = rg.value; };
       }
       bind();
     });
@@ -389,7 +418,8 @@
       clearSel(); noteRecent(dest);
       return Promise.all([reload(), refreshB()]).then(function () {
         var n = r.moved.length, bad = r.failed.length;
-        toast(n ? n + "개를 ‘" + nameOf(dest) + "’(으)로 옮겼어요" + (bad ? " (실패 " + bad + ")" : "") : (bad ? r.failed[0].error : "이미 그 폴더에 있어요"), "되돌리기", n ? function () { undoMove(r.moved); } : null);
+        var u = n ? pushUndo(n + "개를 ‘" + nameOf(dest) + "’(으)로 이동", function () { return undoMove(r.moved); }) : null;
+        toast(n ? n + "개를 ‘" + nameOf(dest) + "’(으)로 옮겼어요" + (bad ? " (실패 " + bad + ")" : "") : (bad ? r.failed[0].error : "이미 그 폴더에 있어요"), "되돌리기", u ? function () { runUndo(u); } : null);
       });
     }).catch(err);
   }
@@ -403,8 +433,9 @@
   }
   function undoMove(moved) {
     var by = {}; moved.forEach(function (m) { var d = parentOf(m.from); (by[d] = by[d] || []).push(m.to); });
-    Promise.all(Object.keys(by).map(function (d) { return FS.move({ paths: by[d], dest: d }); })).then(function () { return Promise.all([reload(), refreshB()]); }).then(function () { toast("되돌렸어요"); }).catch(err);
+    return Promise.all(Object.keys(by).map(function (d) { return FS.move({ paths: by[d], dest: d }); })).then(function () { return Promise.all([reload(), refreshB()]); }).then(function () { toast("되돌렸어요"); }).catch(err);
   }
+  function restoreIds(ids) { return FS.restore({ ids: ids }).then(function () { return Promise.all([reload(), refreshB()]); }).then(function () { toast("복원했어요"); }); }
   function doTrash() {
     var paths = selPaths(); if (!paths.length) return;
     var hasF = paths.some(function (p) { return S.folders.some(function (f) { return f.path === p; }); });
@@ -412,23 +443,34 @@
       if (!ok) return;
       return FS.trash({ paths: paths }).then(function (r) {
         clearSel(); return reload().then(function () {
-          toast(r.ids.length + "개를 휴지통으로 보냈어요" + (r.failed.length ? " (실패 " + r.failed.length + ")" : ""), "되돌리기", r.ids.length ? function () { FS.restore({ ids: r.ids }).then(reload).then(function () { toast("복원했어요"); }).catch(err); } : null);
+          var u = r.ids.length ? pushUndo(r.ids.length + "개 삭제", function () { return restoreIds(r.ids); }) : null;
+          toast(r.ids.length + "개를 휴지통으로 보냈어요" + (r.failed.length ? " (실패 " + r.failed.length + ")" : ""), "되돌리기", u ? function () { runUndo(u); } : null);
         });
       });
     }).catch(err);
   }
-  function doRename() {
-    var p = selPaths()[0]; if (!p) return;
-    askText("이름 바꾸기", nameOf(p), "바꾸기").then(function (n) {
+  function remap(oldP, newP) {
+    function f(p) { return p === oldP ? newP : (p && p.indexOf(oldP + "/") === 0 ? newP + p.slice(oldP.length) : p); }
+    S.cwd = f(S.cwd); S.cwd2 = f(S.cwd2); store.set("cwd", S.cwd); store.set("cwd2", S.cwd2);
+    B.recent = B.recent.map(f); store.set("recent", B.recent);
+  }
+  function renameItem(p) {
+    return askText("이름 바꾸기", nameOf(p), "바꾸기").then(function (n) {
       if (!n || n === nameOf(p)) return;
-      return FS.rename({ path: p, name: n }).then(function () { clearSel(); return reload(); }).then(function () { toast("이름을 바꿨어요"); });
+      var old = nameOf(p);
+      return FS.rename({ path: p, name: n }).then(function (r) {
+        remap(p, r.path); clearSel();
+        pushUndo("이름 ‘" + old + "’ → ‘" + n + "’", function () { return FS.rename({ path: r.path, name: old }).then(function (r2) { remap(r.path, r2.path); return Promise.all([reload(), refreshB()]); }).then(function () { toast("이름을 되돌렸어요"); }); });
+        return Promise.all([reload(), refreshB()]);
+      }).then(function () { toast("이름을 바꿨어요"); });
     }).catch(err);
   }
+  function doRename() { var p = selPaths()[0]; if (p) renameItem(p); }
   function newFolder(parent) {
-    if (parent == null) { toast("Pictures 같은 폴더 안으로 들어가서 만들어 주세요"); return; }
-    askText("새 폴더 이름", "", "만들기").then(function (n) {
+    if (parent == null) { toast("폴더 안으로 들어가서 만들어 주세요"); return Promise.resolve(); }
+    return askText("새 폴더 이름", "", "만들기").then(function (n) {
       if (!n) return;
-      return FS.mkdir({ parent: parent, name: n }).then(function (m) { S.fresh.add(m.path); return reload(); }).then(function () { return refreshB(); }).then(function () { toast("폴더를 만들었어요"); });
+      return FS.mkdir({ parent: parent, name: n }).then(function (m) { S.fresh.add(m.path); return Promise.all([reload(), refreshB()]); }).then(function () { toast("폴더를 만들었어요"); });
     }).catch(err);
   }
   $("#actions").addEventListener("click", function (e) {
@@ -609,12 +651,43 @@
   $("#crumbB").addEventListener("click", function (e) { var b = e.target.closest("[data-go]"); if (b) goB(b.dataset.go || null); });
   $("#bgrid").addEventListener("click", function (e) {
     var it = e.target.closest(".it"); if (!it) return; var p = it.dataset.p;
+    if (bSup) { bSup = false; return; }
     if (!e.target.closest(".go") && cardOn()) { cardMove(p); return; }
     if (!e.target.closest(".go") && S.sel.size && !S.trashView) { moveInto(selPaths(), p); return; }
+    if (bSup) { bSup = false; return; }
     B.mode = "name"; store.set("bmode", "name"); goB(p);
   });
   $("#bSort").onclick = function () { B.mode = B.mode === "recent" ? "name" : "recent"; store.set("bmode", B.mode); B.q = ""; $("#bQ").value = ""; $(".bh").classList.remove("search"); drawB(); };
   function closeSearch() { B.q = ""; $("#bQ").value = ""; $(".bh").classList.remove("search"); drawB(); }
+  $("#bAdd").onclick = function () { newFolder(S.cwd2); };
+  var bSup = false;
+  function addMenu(x, y, parent) {
+    popAt(x, y, '<button class="mi" data-m="mk">＋ 여기에 새 폴더 만들기</button>', function (el) { el.querySelector("[data-m]").onclick = function () { closePop(); newFolder(parent); }; });
+  }
+  longPress($("#scroll"), 520, function (e) { return e.target.closest(".it") || S.trashView ? null : true; }, function (x, y) { if (S.cwd == null) { toast("폴더 안으로 들어가서 만들어 주세요"); return; } if (navigator.vibrate) try { navigator.vibrate(10); } catch (e) {} addMenu(x, y, S.cwd); });
+  longPress($("#bscroll"), 520, function (e) { var it = e.target.closest(".it"); return it ? it : true; }, function (x, y, c) {
+    if (navigator.vibrate) try { navigator.vibrate(10); } catch (e) {}
+    if (c === true) { if (S.cwd2 == null) { toast("폴더 안으로 들어가서 만들어 주세요"); return; } addMenu(x, y, S.cwd2); return; }
+    var p = c.dataset.p, isRoot = S.roots.some(function (r) { return r.path === p; }); bSup = true; setTimeout(function () { bSup = false; }, 700);
+    popAt(x, y, (isRoot ? "" : '<button class="mi" data-m="rn">이름 바꾸기</button>') + '<button class="mi" data-m="mk">＋ 이 안에 새 폴더</button>' + (isRoot ? "" : '<button class="mi" data-m="del" style="color:var(--danger)">휴지통으로</button>'), function (el) {
+      el.querySelectorAll("[data-m]").forEach(function (b) {
+        b.onclick = function () {
+          var m = b.dataset.m; closePop();
+          if (m === "rn") renameItem(p);
+          else if (m === "mk") newFolder(p);
+          else confirmBox("‘" + nameOf(p) + "’ 폴더를 지울까요?", "안의 사진까지 모두 휴지통으로 가요. 30일 안에는 복원할 수 있어요.", "휴지통으로", true).then(function (ok) {
+            if (!ok) return;
+            return FS.trash({ paths: [p] }).then(function (r) {
+              return Promise.all([reload(), refreshB()]).then(function () {
+                var u = r.ids.length ? pushUndo("폴더 ‘" + nameOf(p) + "’ 삭제", function () { return restoreIds(r.ids); }) : null;
+                toast("폴더를 휴지통으로 보냈어요", "되돌리기", u ? function () { runUndo(u); } : null);
+              });
+            });
+          }).catch(err);
+        };
+      });
+    });
+  });
   $("#bFind").onclick = function () {
     var bh = $(".bh");
     if (bh.classList.contains("search")) { closeSearch(); return; }
@@ -669,7 +742,8 @@
     var f = cardList()[S.ci]; if (!f) return;
     FS.trash({ paths: [f.path] }).then(function (r) {
       return reload().then(function () {
-        toast("‘" + f.name + "’을(를) 휴지통으로 보냈어요", "되돌리기", r.ids.length ? function () { FS.restore({ ids: r.ids }).then(reload).then(function () { toast("복원했어요"); }).catch(err); } : null);
+        var u = r.ids.length ? pushUndo("‘" + f.name + "’ 삭제", function () { return restoreIds(r.ids); }) : null;
+        toast("‘" + f.name + "’을(를) 휴지통으로 보냈어요", "되돌리기", u ? function () { runUndo(u); } : null);
       });
     }).catch(err);
   }

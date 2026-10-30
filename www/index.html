@@ -22,6 +22,7 @@ window.addEventListener("unhandledrejection", function (e) { var r = e.reason; w
     <div class="row main">
       <button class="ib" id="btnTree" aria-label="폴더 트리"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
       <nav id="crumb"></nav>
+      <button class="ib" id="btnUndo" aria-label="되돌리기" hidden><svg viewBox="0 0 24 24"><path d="M9 7L4 12l5 5M4 12h10a6 6 0 0 1 0 12h-2" transform="translate(0 -3)"/></svg></button>
       <button class="ib" id="btnSplit" aria-label="분할 화면"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16"/></svg></button>
       <button class="ib" id="btnSort" aria-label="정렬"><svg viewBox="0 0 24 24"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/></svg></button>
       <button class="ib" id="btnMore" aria-label="더 보기"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></button>
@@ -61,6 +62,7 @@ window.addEventListener("unhandledrejection", function (e) { var r = e.reason; w
       <div class="bh">
         <nav id="crumbB"></nav>
         <input id="bQ" type="search" placeholder="폴더 검색 (ㅊㅅ 같은 초성도 돼요)" autocomplete="off">
+        <button class="ib sm" id="bAdd" aria-label="새 폴더"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
         <button class="ib sm" id="bFind" aria-label="폴더 검색"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" style="fill:none;stroke:currentColor;stroke-width:2"/><path d="M16 16l4 4"/></svg></button>
         <button class="pill" id="bSort">이름순</button>
       </div>
