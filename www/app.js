@@ -409,6 +409,7 @@
 
   /* ---------- 태그 (이 앱 안에 저장) ---------- */
   var TAGS = store.get("tags", {});
+  function tagHue(t) { var n = 0; for (var i = 0; i < t.length; i++) n = (n * 31 + t.charCodeAt(i)) % 360; return n; }
   function saveTags() { store.set("tags", TAGS); }
   function tagsOf(p) { return TAGS[p] || []; }
   function allTags() { var m = {}; Object.keys(TAGS).forEach(function (p) { TAGS[p].forEach(function (t) { m[t] = (m[t] || 0) + 1; }); }); return m; }
@@ -428,7 +429,7 @@
     function html() {
       var at = allTags(), names = Object.keys(at).sort(function (a, b) { return at[b] - at[a] || a.localeCompare(b, "ko"); });
       return "<h3>" + (paths.length > 1 ? paths.length + "장에 태그" : "태그") + '</h3><div class="body"><div class="tagpick">' +
-        (names.length ? names.map(function (t) { return '<button class="' + state(t) + '" data-t="' + esc(t) + '">#' + esc(t) + "<small>" + at[t] + "</small></button>"; }).join("") : '<span style="color:var(--mute);font-size:13px">아직 태그가 없어요. 아래에 적어서 만들어 보세요.</span>') +
+        (names.length ? names.map(function (t) { return '<button class="' + state(t) + '" style="--th:' + tagHue(t) + '" data-t="' + esc(t) + '"><i class="tdot"></i>' + esc(t) + "<small>" + at[t] + "</small></button>"; }).join("") : '<span style="color:var(--mute);font-size:13px">아직 태그가 없어요. 아래에 적어서 만들어 보세요.</span>') +
         '</div><input type="text" id="tgIn" placeholder="새 태그 적고 엔터 (쉼표로 여러 개)"></div><div class="btns"><button class="pri" data-done="1">완료</button></div>';
     }
     return sheet(html(), function (el, close) {
@@ -473,10 +474,11 @@
     var at = allTags(), q = TP.q.trim(), jamo = /^[ㄱ-ㅎ]+$/.test(q);
     var names = Object.keys(at).filter(function (t) { return !q || (jamo ? cho(t).indexOf(q) >= 0 : t.toLowerCase().indexOf(q.toLowerCase()) >= 0); }).sort(function (a, b) { return at[b] - at[a] || a.localeCompare(b, "ko"); });
     $("#tagList").innerHTML = names.length ? names.map(function (t) {
-      return '<div class="tgrow' + (TP.sel.indexOf(t) >= 0 ? " on" : "") + '" data-t="' + esc(t) + '"><span class="tgc"></span><span class="tgn">#' + esc(t) + '</span><span class="tgk">' + at[t] + "장</span></div>";
-    }).join("") : '<div class="rempty">' + (Object.keys(at).length ? "맞는 태그가 없어요" : "아직 태그가 없어요.<br>사진을 길게 눌러 고른 뒤 ‘태그’ 버튼으로 만들어 보세요.") + "</div>";
+      return '<div class="tgrow' + (TP.sel.indexOf(t) >= 0 ? " on" : "") + '" data-t="' + esc(t) + '" style="--th:' + tagHue(t) + '"><span class="tgd"></span><span class="tgn">' + esc(t) + '</span><span class="tgk">' + at[t] + '</span><span class="tgc"></span></div>';
+    }).join("") : '<div class="tp-empty"><svg viewBox="0 0 24 24"><path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7a1 1 0 0 1 .7.3l7.6 7.6a1 1 0 0 1 0 1.4l-7.7 7.7a1 1 0 0 1-1.4 0L3.8 12.9a1 1 0 0 1-.3-.7z"/><circle cx="8.3" cy="8.3" r="1.3"/></svg>' + (Object.keys(at).length ? "맞는 태그가 없어요" : "아직 태그가 없어요<br><small>사진을 길게 눌러 고른 뒤<br>아래 ‘태그’ 버튼으로 만들어 보세요</small>") + "</div>";
+    $("#tpCount").textContent = Object.keys(at).length ? Object.keys(at).length + "개" : "";
     document.querySelectorAll("#tagPanel [data-tm]").forEach(function (b) { b.classList.toggle("on", b.dataset.tm === TP.mode); });
-    $("#tpShow").textContent = TP.sel.length ? "모아 보기 (" + TP.sel.length + ")" : "모아 보기";
+    $("#tpShow").textContent = TP.sel.length ? "모아 보기 · " + TP.sel.length + "개 선택" : "모아 보기"; $("#tpShow").classList.toggle("dim", !TP.sel.length); $("#tpClear").style.visibility = TP.sel.length ? "visible" : "hidden";
   }
   function openTagPanel() {
     var at = allTags(); TP.sel = TP.sel.filter(function (t) { return at[t]; }); TP.q = ""; $("#tq").value = "";
@@ -524,7 +526,7 @@
       var seen = {}, files = [];
       tagged.slice(0, 200).concat(r.files).forEach(function (f) { if (!seen[f.path]) { seen[f.path] = 1; files.push(f); } });
       var html = "";
-      if (names.length) html += '<div class="rsec">태그</div><div style="padding:0 6px">' + names.slice(0, 20).map(function (t) { return '<button class="tagchip" data-tag="' + esc(t) + '">#' + esc(t) + " " + at[t] + "</button>"; }).join("") + "</div>";
+      if (names.length) html += '<div class="rsec">태그</div><div style="padding:0 6px">' + names.slice(0, 20).map(function (t) { return '<button class="tagchip" style="--th:' + tagHue(t) + '" data-tag="' + esc(t) + '">#' + esc(t) + " " + at[t] + "</button>"; }).join("") + "</div>";
       if (r.folders.length) html += '<div class="rsec">폴더 ' + r.folders.length + "</div>" + r.folders.map(function (x) { return rowHtml("folder", x); }).join("");
       if (files.length) html += '<div class="rsec">사진 ' + files.length + (files.length >= 400 ? "+" : "") + "</div>" + files.map(function (x) { return rowHtml("file", x); }).join("");
       if (!html) html = '<div class="rempty">찾는 결과가 없어요</div>';
@@ -995,7 +997,7 @@
     emp.textContent = f ? "" : "이 폴더에는 사진이 없어요";
     im.style.visibility = f ? "visible" : "hidden";
     var tl = f ? tagsOf(f.path) : [];
-    $("#cTags").innerHTML = f ? tl.map(function (t) { return '<span class="tagchip">#' + esc(t) + "</span>"; }).join("") + '<button data-ct="1">＋ 태그</button>' : "";
+    $("#cTags").innerHTML = f ? tl.map(function (t) { return '<span class="tagchip" style="--th:' + tagHue(t) + '">#' + esc(t) + "</span>"; }).join("") + '<button data-ct="1">＋ 태그</button>' : "";
     $("#cHint").textContent = S.split ? "위로 쓸면 삭제 · 아래로 쓸면 되돌리기 · 옆으로 넘기면 건너뛰기 · 아래 폴더를 누르면 옮기기" : "위로 쓸면 삭제 · 아래로 쓸면 되돌리기 · 옆으로 넘기면 건너뛰기";
     var rc = B.recent.filter(function (p) { return p !== S.cwd; }).slice(0, 10);
     $("#cRecent").innerHTML = rc.map(function (p) { return '<button data-p="' + esc(p) + '">' + esc(nameOf(p)) + "</button>"; }).join("");

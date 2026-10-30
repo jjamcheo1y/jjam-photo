@@ -420,3 +420,45 @@ body:not(.split) #btnCard,#btnCard{display:grid!important;place-items:center}
 .tpfoot .pill{flex:1;padding:11px 0;font-size:14px}
 .tpfoot .pri2{background:var(--btn-blue);color:#fff;box-shadow:0 0 0 1px rgba(20,70,160,.55)}
 #top .row.sel{height:50px}
+
+/* ===================== 태그 패널: 오른쪽에서 열리는 맥 인스펙터 느낌 ===================== */
+#tagPanel{left:auto;right:0;width:min(88vw,330px);transform:translateX(104%);border-right:0;border-left:1px solid var(--line);border-radius:18px 0 0 18px;background:var(--glass);padding-top:var(--safeT)}
+#tagPanel.show{transform:none}
+.tp-head{display:flex;align-items:center;justify-content:space-between;padding:12px 8px 6px 18px}
+.tp-title{display:flex;align-items:center;gap:8px;font-size:18px}
+.tp-title svg{width:20px;height:20px;color:var(--accent)}
+.tp-title span{font-size:13px;color:var(--mute);background:var(--hover);padding:1px 8px;border-radius:10px}
+.tp-title span:empty{display:none}
+.tp-search{position:relative;margin:4px 14px 10px}
+.tp-search svg{position:absolute;left:10px;top:50%;width:16px;height:16px;margin-top:-8px;color:var(--mute)}
+.tp-search input{width:100%;padding:9px 12px 9px 33px;border-radius:9px;border:0;background:var(--hover);color:var(--ink);font:inherit;font-size:14px;outline:none}
+.tp-search input:focus{box-shadow:0 0 0 2px var(--accent)}
+.tp-seg{display:flex;margin:0 14px 10px;padding:2px;border-radius:9px;background:var(--hover);gap:1px}
+.tp-seg button{flex:1;padding:6px 0;border-radius:7px;font-size:13px;color:var(--mute);background:none;box-shadow:none}
+.tp-seg button.on{background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.18),0 0 0 .5px rgba(0,0,0,.08)}
+@media (prefers-color-scheme:dark){.tp-seg button.on{background:#55555e}}
+#tagList{flex:1;min-height:0;overflow:auto;padding:0 8px}
+.tgrow{display:flex;align-items:center;gap:10px;padding:0 10px;min-height:44px;border-radius:9px;margin-bottom:1px}
+.tgrow:active{background:var(--hover)}
+.tgrow .tgd{flex:none;width:12px;height:12px;border-radius:50%;background:hsl(var(--th) 75% 55%);box-shadow:inset 0 -2px 3px rgba(0,0,0,.18),0 0 0 .5px rgba(0,0,0,.15)}
+.tgrow .tgn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}
+.tgrow .tgk{flex:none;color:var(--mute);font-size:12px;font-variant-numeric:tabular-nums}
+.tgrow .tgc{flex:none;width:20px;height:20px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--line);display:grid;place-items:center;color:#fff;font-size:12px;font-weight:700}
+.tgrow.on{background:var(--accent-bg)}
+.tgrow.on .tgc{background:var(--btn-blue);box-shadow:none}
+.tgrow.on .tgc::after{content:"✓"}
+.tp-empty{padding:60px 20px;text-align:center;color:var(--mute);font-size:14px;line-height:1.6}
+.tp-empty svg{display:block;margin:0 auto 10px;width:40px;height:40px;opacity:.35}
+.tp-empty small{font-size:12px;opacity:.9}
+.tp-foot{display:flex;gap:8px;align-items:center;padding:10px 14px calc(14px + var(--safeB));border-top:1px solid var(--line)}
+.tp-clear{flex:none;padding:10px 4px;font-size:13px;color:var(--accent);background:none;box-shadow:none}
+.tp-go{flex:1;padding:12px 0;border-radius:9px;font-weight:600;font-size:15px;color:#fff;background:var(--btn-blue);box-shadow:0 0 0 1px rgba(20,70,160,.55),0 1px 2px rgba(0,0,0,.15)}
+.tp-go.dim{opacity:.45}
+.tp-go:active{filter:brightness(.93)}
+/* 태그 칩에 태그마다 다른 색 */
+.tagchip{background:hsl(var(--th,210) 85% 92%);color:hsl(var(--th,210) 55% 30%)}
+@media (prefers-color-scheme:dark){.tagchip{background:hsl(var(--th,210) 40% 26%);color:hsl(var(--th,210) 80% 82%)}}
+.tagpick .tdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:hsl(var(--th) 75% 55%)}
+.tagpick button.all .tdot{box-shadow:0 0 0 1.5px #fff}
+/* 오른쪽 도구 묶음에서 태그 아이콘 */
+.tools.right #btnTags{color:var(--ink)}
