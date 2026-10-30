@@ -41,6 +41,11 @@ function MockFS() {
   function pathNodeByTmp(par, name) { return node(par).kids.filter(function (k) { return k.name === "\u0000" + name; })[0]; }
   function pathNode(p) { if (p.indexOf("/.jjamtrash/") > 0) { var id = p.split("/")[p.split("/").length - 2]; var t = trash.filter(function (x) { return x.id === id; })[0]; return t && t.node; } return node(p); }
   return {
+    stat: function (o) {
+      var out = [];
+      o.paths.forEach(function (p) { var n = node(p); if (n && !n.dir) out.push({ name: n.name, path: p, mtime: n.mtime, size: n.size, video: !!n.video }); });
+      return wait({ files: out });
+    },
     search: function (o) {
       var q = String(o.q || "").trim().toLowerCase(), jamo = /^[ㄱ-ㅎ]+$/.test(q), CH = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ", fo = [], fi = [];
       function cho(s) { return Array.from(s).map(function (c) { var k = c.charCodeAt(0) - 0xAC00; return k >= 0 && k < 11172 ? CH[Math.floor(k / 588)] : c.toLowerCase(); }).join(""); }

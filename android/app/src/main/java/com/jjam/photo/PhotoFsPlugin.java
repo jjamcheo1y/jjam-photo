@@ -537,6 +537,31 @@ public class PhotoFsPlugin extends Plugin {
         return n;
     }
 
+    /** 경로 여러 개의 이름·크기·날짜를 한 번에 (태그 모아 보기용). 없어진 파일은 건너뜀 */
+    @PluginMethod
+    public void stat(final PluginCall call) {
+        pool.execute(() -> {
+            try {
+                JSArray files = new JSArray();
+                for (String p : strings(call.getArray("paths"))) {
+                    try {
+                        File f = safe(p);
+                        if (!f.isFile() || !isMedia(f.getName())) continue;
+                        JSObject o = new JSObject();
+                        o.put("name", f.getName()); o.put("path", f.getPath()); o.put("mtime", f.lastModified()); o.put("size", f.length());
+                        o.put("video", VID.contains(ext(f.getName())));
+                        files.put(o);
+                    } catch (Exception ignore) {}
+                }
+                JSObject res = new JSObject();
+                res.put("files", files);
+                call.resolve(res);
+            } catch (Exception e) {
+                call.reject(String.valueOf(e.getMessage()));
+            }
+        });
+    }
+
     /* ---------- 검색 (폴더·사진 이름, 초성 가능) ---------- */
     private static final String CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
 
