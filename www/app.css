@@ -227,3 +227,54 @@ body.selecting.hasSel #btnCard{display:none}
 #vImg{transition:none;will-change:transform;touch-action:none}
 #vImg.anim{transition:transform .22s ease-out}
 body:not(.split) #grip,body:not(.split) #btnCard{display:none!important}
+
+/* ===================== 맥 감성 손질: 모서리 작게, 아주 옅은 그라데이션 버튼, 메뉴는 목록형 ===================== */
+:root{
+  --btn-bg:linear-gradient(to bottom,rgba(255,255,255,.62),rgba(255,255,255,0)),var(--bg);
+  --btn-bd:rgba(0,0,0,.18); --btn-hl:inset 0 1px 0 rgba(255,255,255,.7);
+  --btn-blue:linear-gradient(to bottom,#5aa5ff,#3b83f3);
+}
+@media (prefers-color-scheme:dark){:root{
+  --btn-bg:linear-gradient(to bottom,rgba(255,255,255,.1),rgba(255,255,255,0)),var(--panel);
+  --btn-bd:rgba(255,255,255,.16); --btn-hl:inset 0 1px 0 rgba(255,255,255,.08);
+}}
+.act,.cb,.pill,#bSort,#sheet .btns button{border-radius:6px;background:var(--btn-bg);box-shadow:var(--btn-hl),0 0 0 1px var(--btn-bd),0 1px 2px rgba(0,0,0,.08);font-weight:500}
+.act:active,.cb:active,.pill:active,#bSort:active,#sheet .btns button:active{filter:brightness(.93)}
+.act.danger,.cb.danger{color:var(--danger)}
+.sel .pill{background:rgba(255,255,255,.2);box-shadow:inset 0 0 0 1px rgba(255,255,255,.35);color:#fff}
+.sel .pill.on{background:#fff;color:var(--accent);box-shadow:none}
+#sheet .btns button.pri,.big{background:var(--btn-blue);color:#fff;box-shadow:0 0 0 1px rgba(20,70,160,.55),0 1px 2px rgba(0,0,0,.15)}
+.ib{border-radius:6px;width:38px}
+.ib:active,.ib.on{background:var(--hover)}
+.ib.on{background:var(--accent-bg);color:var(--accent)}
+/* 선택지 묶음: 맥 세그먼트 컨트롤 */
+.opt{display:flex;flex-wrap:wrap;gap:0 0;align-items:stretch}
+.opt .lbl{flex:0 0 100%;margin:0 2px 5px}
+.opt button{flex:1 1 auto;border-radius:0;margin-left:-1px;padding:6px 10px;background:var(--btn-bg);box-shadow:var(--btn-hl),0 0 0 1px var(--btn-bd);font-size:13px;font-weight:500}
+.opt .lbl + button{margin-left:0;border-radius:6px 0 0 6px}
+.opt button:last-child{border-radius:0 6px 6px 0}
+.opt .lbl + button:last-child{border-radius:6px}
+.opt button.on{position:relative;z-index:1;background:var(--btn-blue);color:#fff;box-shadow:0 0 0 1px rgba(20,70,160,.55)}
+/* 점 세 개·정렬 메뉴: 맥 메뉴처럼 목록 */
+#pop{padding:5px;border-radius:10px;min-width:210px}
+#pop .mi{background:none;box-shadow:none;border-radius:5px;padding:7px 10px;margin:0;font-size:14px;font-weight:400}
+#pop .mi:hover,#pop .mi:active{background:var(--accent);color:#fff}
+#pop .mi.on::after{color:inherit}
+.msep{height:1px;background:var(--line);margin:5px 8px}
+#pop .opt{margin:6px 6px 10px}
+#pop .opt:last-child{margin-bottom:6px}
+/* 분할 경계: 얇게(선택하면 버튼이 들어가도록 늘어남) */
+body.split #mid{height:22px;padding:0 6px;transition:height .15s}
+body.split.selecting.hasSel:not(.trashv) #mid{height:46px}
+#grip{position:relative;width:56px;height:100%;display:grid;place-items:center;border-radius:0}
+#grip::before{content:"";position:absolute;left:-6px;right:-6px;top:-10px;bottom:-10px}
+#grip i{display:block;width:34px;height:4px;border-radius:2px;background:var(--mute);opacity:.55}
+#grip:active i{opacity:1;background:var(--accent)}
+#grip:active{background:none}
+body.split.selecting.hasSel #grip{width:36px}
+body.split .act{padding:7px 0}
+/* 카드 모드 아이콘 버튼 */
+body:not(.split) #btnCard{display:none}
+#btnCard{display:inline-grid;background:none;box-shadow:none;border-radius:6px;padding:0}
+body.selecting.hasSel #btnCard{display:grid}
+body.split #btnCard,body.card #btnCard{display:grid;place-items:center}
