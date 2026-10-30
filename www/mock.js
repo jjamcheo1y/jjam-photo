@@ -38,8 +38,26 @@ function MockFS() {
     var s = "<svg xmlns='http://www.w3.org/2000/svg' width='" + size + "' height='" + size + "'><rect width='100%' height='100%' fill='hsl(" + hue + ",42%,62%)'/><circle cx='70%' cy='32%' r='" + size / 8 + "' fill='hsl(" + hue + ",50%,82%)'/><path d='M0 " + size + "L" + size * .4 + " " + size * .5 + "L" + size * .7 + " " + size * .8 + "L" + size * .85 + " " + size * .65 + "L" + size + " " + size + "Z' fill='hsl(" + hue + ",40%,40%)'/><text x='8' y='" + (size - 10) + "' font-size='" + Math.max(12, size / 16) + "' fill='white'>" + label + "</text></svg>";
     return "data:image/svg+xml;utf8," + encodeURIComponent(s);
   }
+  function pathNodeByTmp(par, name) { return node(par).kids.filter(function (k) { return k.name === "\u0000" + name; })[0]; }
   function pathNode(p) { if (p.indexOf("/.jjamtrash/") > 0) { var id = p.split("/")[p.split("/").length - 2]; var t = trash.filter(function (x) { return x.id === id; })[0]; return t && t.node; } return node(p); }
   return {
+    search: function (o) {
+      var q = String(o.q || "").trim().toLowerCase(), jamo = /^[ㄱ-ㅎ]+$/.test(q), CH = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ", fo = [], fi = [];
+      function cho(s) { return Array.from(s).map(function (c) { var k = c.charCodeAt(0) - 0xAC00; return k >= 0 && k < 11172 ? CH[Math.floor(k / 588)] : c.toLowerCase(); }).join(""); }
+      function hit(n) { return jamo ? cho(n).indexOf(q) >= 0 : n.toLowerCase().indexOf(q) >= 0; }
+      function walk(n, p, rel) { n.kids.forEach(function (k) { var kp = p + "/" + k.name; if (k.dir) { if (q && hit(k.name) && fo.length < 80) fo.push({ name: k.name, path: kp, parent: rel }); walk(k, kp, rel ? rel + " › " + k.name : p.split("/").pop() + " › " + k.name); } else if (q && hit(k.name) && fi.length < 400) fi.push({ name: k.name, path: kp, parent: rel || p.split("/").pop(), mtime: k.mtime, size: k.size, video: !!k.video }); }); }
+      tree.kids.forEach(function (r) { walk(r, HOME + "/" + r.name, ""); });
+      return wait({ folders: fo, files: fi });
+    },
+    renameMany: function (o) {
+      var out = [], names = {};
+      for (var i = 0; i < o.items.length; i++) { var it = o.items[i], par = parentOf(it.path); if (names[par + "/" + it.name]) return Promise.reject({ message: "새 이름이 서로 겹쳐요: " + it.name }); names[par + "/" + it.name] = 1; }
+      var sel = {}; o.items.forEach(function (it) { sel[it.path] = 1; });
+      for (var j = 0; j < o.items.length; j++) { var it2 = o.items[j], pn = node(parentOf(it2.path)); if (pn.kids.some(function (k) { return k.name === it2.name && !sel[parentOf(it2.path) + "/" + k.name]; })) return Promise.reject({ message: "같은 이름이 이미 있어요: " + it2.name }); }
+      o.items.forEach(function (it) { node(it.path).name = "\u0000" + it.name; });
+      o.items.forEach(function (it) { var nd = pathNodeByTmp(parentOf(it.path), it.name); nd.name = it.name; out.push({ from: it.path, to: parentOf(it.path) + "/" + it.name }); });
+      return wait({ renamed: out });
+    },
     openExternal: function (o) { window.__opened = o.path; return wait({}); },
     hasAccess: function () { return wait({ granted: true }); },
     requestAccess: function () { return wait({}); },
@@ -55,7 +73,7 @@ function MockFS() {
       return wait({ folders: fo, files: fi });
     },
     tree: function (o) {
-      function t(n, p, d) { return { name: n.name, path: p, has: hasM(n), kids: d <= 0 ? [] : n.kids.filter(function (k) { return k.dir; }).sort(function (a, b) { return a.name.localeCompare(b.name); }).map(function (k) { return t(k, p + "/" + k.name, d - 1); }) }; }
+      function t(n, p, d) { return { name: n.name, path: p, has: hasM(n), media: n.kids.filter(function (k) { return !k.dir; }).length, kids: d <= 0 ? [] : n.kids.filter(function (k) { return k.dir; }).sort(function (a, b) { return a.name.localeCompare(b.name); }).map(function (k) { return t(k, p + "/" + k.name, d - 1); }) }; }
       return wait({ tree: t(node(o.path), o.path, o.depth || 6) });
     },
     thumb: function (o) { var n = pathNode(o.path); return wait({ data: svg(n ? n.hue || 200 : 0, nameOf(o.path), o.size > 512 ? 800 : 160) }); },

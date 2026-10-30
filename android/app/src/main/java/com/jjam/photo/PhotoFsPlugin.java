@@ -294,6 +294,7 @@ public class PhotoFsPlugin extends Plugin {
         o.put("path", dir.getPath());
         JSArray kids = new JSArray();
         boolean has = false;
+        int mediaCount = 0;
         File[] list = dir.listFiles();
         if (list != null) {
             Arrays.sort(list, (x, y) -> x.getName().compareToIgnoreCase(y.getName()));
@@ -305,9 +306,10 @@ public class PhotoFsPlugin extends Plugin {
                         kids.put(c);
                         if (c.optBoolean("has")) has = true;
                     } else if (!has && hasMedia(k, new int[]{800}, 4)) has = true;
-                } else if (!has && isMedia(k.getName())) has = true;
+                } else if (isMedia(k.getName())) { mediaCount++; has = true; }
             }
         }
+        o.put("media", mediaCount);
         o.put("has", has);
         o.put("kids", kids);
         return o;
@@ -533,6 +535,117 @@ public class PhotoFsPlugin extends Plugin {
         n = n.trim();
         if (n.isEmpty() || n.equals(".") || n.equals("..") || n.contains("/")) throw new Exception("쓸 수 없는 이름이에요");
         return n;
+    }
+
+    /* ---------- 검색 (폴더·사진 이름, 초성 가능) ---------- */
+    private static final String CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
+
+    private static String cho(String s) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            int k = c - 0xAC00;
+            if (k >= 0 && k < 11172) sb.append(CHO.charAt(k / 588)); else sb.append(Character.toLowerCase(c));
+        }
+        return sb.toString();
+    }
+
+    private void walkSearch(File dir, String rel, String q, boolean jamo, JSArray folders, JSArray files, int depth) {
+        if (depth < 0 || (folders.length() >= 80 && files.length() >= 400)) return;
+        File[] kids = dir.listFiles();
+        if (kids == null) return;
+        for (File k : kids) {
+            String n = k.getName();
+            if (n.startsWith(".")) continue;
+            boolean hit = jamo ? cho(n).contains(q) : n.toLowerCase().contains(q);
+            if (k.isDirectory()) {
+                if (hit && folders.length() < 80) {
+                    JSObject o = new JSObject();
+                    o.put("name", n); o.put("path", k.getPath()); o.put("parent", rel);
+                    folders.put(o);
+                }
+                walkSearch(k, rel.isEmpty() ? dir.getName() + " › " + n : rel + " › " + n, q, jamo, folders, files, depth - 1);
+            } else if (hit && isMedia(n) && files.length() < 400) {
+                JSObject o = new JSObject();
+                o.put("name", n); o.put("path", k.getPath()); o.put("parent", rel.isEmpty() ? dir.getName() : rel + " › " + dir.getName());
+                o.put("mtime", k.lastModified()); o.put("size", k.length()); o.put("video", VID.contains(ext(n)));
+                files.put(o);
+            }
+        }
+    }
+
+    @PluginMethod
+    public void search(final PluginCall call) {
+        pool.execute(() -> {
+            try {
+                String q = String.valueOf(call.getString("q", "")).trim();
+                JSArray folders = new JSArray(), files = new JSArray();
+                if (!q.isEmpty()) {
+                    boolean jamo = q.matches("^[ㄱ-ㅎ]+$");
+                    String ql = jamo ? q : q.toLowerCase();
+                    for (String r : new String[]{"DCIM", "Pictures", "Download", "Movies"}) {
+                        File d = new File(root, r);
+                        if (d.isDirectory()) walkSearch(d, "", ql, jamo, folders, files, 12);
+                    }
+                }
+                JSObject res = new JSObject();
+                res.put("folders", folders);
+                res.put("files", files);
+                call.resolve(res);
+            } catch (Exception e) {
+                call.reject(String.valueOf(e.getMessage()));
+            }
+        });
+    }
+
+    /** 여러 개 이름을 한 번에 바꿈. 이름이 서로 겹쳐도 되게 임시 이름을 거쳐 가고, 하나라도 실패하면 모두 원래대로 */
+    @PluginMethod
+    public void renameMany(final PluginCall call) {
+        pool.execute(() -> {
+            try {
+                JSArray items = call.getArray("items");
+                int n = items.length();
+                File[] src = new File[n], tmp = new File[n], fin = new File[n];
+                for (int i = 0; i < n; i++) {
+                    JSONObject it = items.getJSONObject(i);
+                    src[i] = safe(it.getString("path"));
+                    fin[i] = new File(src[i].getParentFile(), cleanName(it.getString("name")));
+                    tmp[i] = new File(src[i].getParentFile(), ".jjam_tmp_" + System.nanoTime() + "_" + i);
+                }
+                Set<String> seen = new HashSet<>();
+                for (int i = 0; i < n; i++) if (!seen.add(fin[i].getPath())) throw new Exception("새 이름이 서로 겹쳐요: " + fin[i].getName());
+                int done1 = 0, done2 = 0;
+                try {
+                    for (int i = 0; i < n; i++) { if (!src[i].renameTo(tmp[i])) throw new Exception("이름을 바꾸지 못했어요: " + src[i].getName()); done1++; }
+                    for (int i = 0; i < n; i++) {
+                        if (fin[i].exists()) throw new Exception("같은 이름이 이미 있어요: " + fin[i].getName());
+                        if (!tmp[i].renameTo(fin[i])) throw new Exception("이름을 바꾸지 못했어요: " + fin[i].getName());
+                        done2++;
+                    }
+                } catch (Exception e) {
+                    for (int i = 0; i < done2; i++) fin[i].renameTo(tmp[i]);
+                    for (int i = 0; i < done1; i++) tmp[i].renameTo(src[i]);
+                    throw e;
+                }
+                List<String> toScan = new ArrayList<>();
+                JSArray out = new JSArray();
+                for (int i = 0; i < n; i++) {
+                    JSObject o = new JSObject();
+                    o.put("from", src[i].getPath()); o.put("to", fin[i].getPath());
+                    out.put(o);
+                    List<String> inside = new ArrayList<>();
+                    collectFiles(fin[i], inside, 3000);
+                    for (String p : inside) { toScan.add(p); toScan.add(src[i].getPath() + p.substring(fin[i].getPath().length())); }
+                    if (toScan.size() > 12000) break;
+                }
+                scan(toScan);
+                JSObject res = new JSObject();
+                res.put("renamed", out);
+                call.resolve(res);
+            } catch (Exception e) {
+                call.reject(String.valueOf(e.getMessage()));
+            }
+        });
     }
 
     /* ---------- 휴지통 ---------- */

@@ -90,7 +90,7 @@
       S.cwd = path; S.folders = r.folders.filter(vis); S.files = r.files; sortList(); store.set("cwd", path); draw(); $("#scroll").scrollTop = 0;
     }).catch(function (e) { err(e); if (S.cwd !== path) go(null); });
   }
-  function reload() { treeCache = null; B.flat = null; return S.cwd == null ? go(null, true) : FS.list({ path: S.cwd }).then(function (r) { S.folders = r.folders.filter(vis); S.files = r.files; sortList(); prune(); draw(); }); }
+  function reload() { B.flat = null; return S.cwd == null ? go(null, true) : FS.list({ path: S.cwd }).then(function (r) { S.folders = r.folders.filter(vis); S.files = r.files; sortList(); prune(); draw(); }); }
   function prune() { var ok = new Set(order().map(function (x) { return x.path; })); S.sel.forEach(function (p) { if (!ok.has(p)) S.sel.delete(p); }); if (!S.sel.size) S.selOn = false, S.range = false; }
 
   /* ---------- 그리기 ---------- */
@@ -139,13 +139,13 @@
       var meta = x.root ? "" : (x.media ? x.media + "장" : "") + (x.media && x.sub ? " · " : "") + (x.sub ? "폴더 " + x.sub : "") || "비었어요";
       return '<div class="it folder' + (colorOf(x.path) ? " col" : "") + on + anc + '"' + colAttr(x.path) + ' data-p="' + esc(x.path) + '" data-f="1"><div class="th"><span class="ck"></span>' + FOLDER_SVG + '</div><div class="lb">' + esc(x.name) + (meta ? "<small>" + esc(meta) + "</small>" : "") + "</div></div>";
     }
-    return '<div class="it' + on + anc + '" data-p="' + esc(x.path) + '"><div class="th"><img data-p="' + esc(x.path) + '" data-state="" alt=""><span class="ck"></span>' + (x.video ? '<span class="vid">영상</span>' : "") + '</div><div class="lb">' + esc(x.name) + "</div></div>";
+    return '<div class="it' + on + anc + '" data-p="' + esc(x.path) + '"><div class="th"><img data-p="' + esc(x.path) + '" data-state="" alt=""><span class="ck"></span>' + (tagsOf(x.path).length ? '<span class="tgb">#' + tagsOf(x.path).length + "</span>" : "") + (x.video ? '<span class="vid">영상</span>' : "") + '</div><div class="lb">' + esc(x.name) + "</div></div>";
   }
   function draw() {
     document.body.classList.toggle("selecting", S.selOn);
     document.body.classList.toggle("hasSel", S.sel.size > 0);
     document.body.classList.toggle("names", S.names);
-    document.body.classList.toggle("card", cardOn());
+    document.body.classList.toggle("card", cardOn()); paintModes();
     document.documentElement.style.setProperty("--cols", S.cols);
     // 위쪽 길 표시
     var c = $("#crumb"), html = '<button data-go="">홈</button>';
@@ -165,9 +165,7 @@
     $("#btnRange").classList.toggle("on", S.range);
     $("#hint").classList.toggle("show", S.range);
     $("#hint").textContent = S.range ? (S.anchor ? "끝 사진을 눌러 주세요" : "시작 사진을 눌러 주세요") : "";
-    var one = S.sel.size === 1 && !S.trashView;
-    $('#actions [data-a=rename]').style.display = one ? "" : "none";
-    $('#actions [data-a=color]').style.display = selHasFolder() ? "" : "none";
+    actionsPaint();
     // 목록
     var g = $("#grid"); g.classList.toggle("trash", S.trashView);
     var list = S.trashView ? S.trash : null, h = "";
@@ -193,8 +191,7 @@
     $("#btnRange").classList.toggle("on", S.range);
     $("#hint").classList.toggle("show", S.range);
     $("#hint").textContent = S.range ? (S.anchor ? "끝 사진을 눌러 주세요" : "시작 사진을 눌러 주세요") : "";
-    $("#actions [data-a=rename]").style.display = S.sel.size === 1 && !S.trashView ? "" : "none";
-    $("#actions [data-a=color]").style.display = selHasFolder() ? "" : "none";
+    actionsPaint();
     document.querySelectorAll("#grid .it").forEach(function (n) {
       n.classList.toggle("on", S.sel.has(n.dataset.p));
       n.classList.toggle("anchor", S.anchor === n.dataset.p);
@@ -361,41 +358,146 @@
   }
   $("#btnSort").onclick = openSort;
 
-  /* ---------- 폴더 트리 (서랍 / 이동할 곳 고르기) ---------- */
-  var treeCache = null;
+  /* ---------- 폴더 트리 (왼쪽 메뉴 / 이동할 곳 고르기): 캐시해 두고 바로 보여 준 뒤 뒤에서 새로 읽음 ---------- */
+  var treeCache = null, treePromise = null, treeStamp = 0, treeStruct = false, dOpen = {};
   function loadTrees(force) {
     if (treeCache && !force) return Promise.resolve(treeCache);
-    return Promise.all(S.roots.map(function (r) { return FS.tree({ path: r.path, depth: 8 }).then(function (x) { x.tree.name = r.name; return S.hideEmpty ? prune2(x.tree) : x.tree; }); })).then(function (t) { treeCache = t; return t; });
+    if (treePromise) return treePromise;
+    treePromise = Promise.all(S.roots.map(function (r) { return FS.tree({ path: r.path, depth: 8 }).then(function (x) { x.tree.name = r.name; return S.hideEmpty ? prune2(x.tree) : x.tree; }); }))
+      .then(function (t) { treeCache = t; treeStamp = Date.now(); treeStruct = false; treePromise = null; return t; }, function (e) { treePromise = null; throw e; });
+    return treePromise;
   }
   function treeHtml(nodes, opts, depth) {
     return nodes.map(function (n) {
-      var has = n.kids && n.kids.length, dis = opts.disabled && opts.disabled(n.path), open = opts.open[n.path];
-      return '<div class="tk" style="' + (depth ? "" : "margin-left:0") + '"><div class="tn' + (dis ? " dis" : "") + (opts.cur === n.path ? " cur" : "") + '" data-p="' + esc(n.path) + '"><span class="tg' + (open ? " open" : "") + '" data-t="1">' + (has ? '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>' : "") + '</span><span class="tl">' + (colorOf(n.path) ? '<i class="dot" style="background:' + colorOf(n.path) + '"></i>' : "") + esc(n.name) + "</span></div>" + (has && open ? treeHtml(n.kids, opts, depth + 1) : "") + "</div>";
+      var has = n.kids && n.kids.length, dis = opts.disabled && opts.disabled(n.path), open = opts.open[n.path], c = colorOf(n.path);
+      return '<div class="tk" style="' + (depth ? "" : "margin-left:0") + '"><div class="tn' + (dis ? " dis" : "") + (opts.cur === n.path ? " cur" : "") + '" data-p="' + esc(n.path) + '" data-k="' + (has ? 1 : 0) + '">' +
+        '<span class="fi' + (has ? " kids" : "") + (open ? " open" : "") + (c ? " col" : "") + '"' + (c ? ' style="--fc:' + c + '"' : "") + ' data-t="1">' + FOLDER_SVG + '</span>' +
+        '<span class="tl"><span class="nm">' + esc(n.name) + '</span></span>' + (n.media ? '<span class="tc">' + n.media + "</span>" : "") + "</div>" +
+        (has && open ? treeHtml(n.kids, opts, depth + 1) : "") + "</div>";
     }).join("");
   }
   function bindTree(el, opts, onPick, redraw) {
     el.onclick = function (e) {
       var tn = e.target.closest(".tn"); if (!tn) return;
       var p = tn.dataset.p;
-      if (e.target.closest("[data-t]")) { opts.open[p] = !opts.open[p]; redraw(); return; }
+      if (e.target.closest("[data-t]") && tn.dataset.k === "1") { opts.open[p] = !opts.open[p]; redraw(); return; }
       onPick(p);
     };
   }
+  function openPathOf(trees, opts) {
+    trees.forEach(function (t) { if (S.cwd && (S.cwd === t.path || S.cwd.indexOf(t.path + "/") === 0)) { var acc = t.path; opts.open[acc] = true; S.cwd.slice(t.path.length + 1).split("/").forEach(function (x) { if (x) { acc += "/" + x; opts.open[acc] = true; } }); } });
+  }
   function openDrawer() {
-    loadTrees(true).then(function (trees) {
-      var opts = { open: {}, cur: S.cwd };
-      trees.forEach(function (t) { if (S.cwd && (S.cwd === t.path || S.cwd.indexOf(t.path + "/") === 0)) { var acc = t.path; opts.open[acc] = true; S.cwd.slice(t.path.length + 1).split("/").forEach(function (s) { if (s) { acc += "/" + s; opts.open[acc] = true; } }); } });
-      var el = $("#drawerTree");
-      function redraw() { el.innerHTML = treeHtml(trees, opts, 0); }
-      redraw(); bindTree(el, opts, function (p) { closeDrawer(); go(p); }, redraw);
-      $("#drawer").classList.add("show"); $("#scrim").classList.add("show");
-    }).catch(err);
+    var el = $("#drawerTree"), opts = { open: dOpen, cur: S.cwd };
+    $("#drawer").classList.add("show"); $("#scrim").classList.add("show");
+    function render(trees) { openPathOf(trees, opts); el.innerHTML = treeHtml(trees, opts, 0); bindTree(el, opts, function (p) { closeDrawer(); go(p); }, function () { render(trees); }); }
+    if (treeCache) {
+      render(treeCache);
+      if (treeStruct || Date.now() - treeStamp > 20000) loadTrees(true).then(function (t) { if ($("#drawer").classList.contains("show") && $("#dq").value.trim() === "") render(t); }).catch(function () {});
+    } else {
+      el.innerHTML = '<div class="rempty">폴더를 불러오는 중…</div>';
+      loadTrees(true).then(render).catch(err);
+    }
   }
   function closeDrawer() { $("#drawer").classList.remove("show"); $("#scrim").classList.remove("show"); }
   $("#btnTree").onclick = openDrawer; $("#scrim").onclick = closeDrawer; document.querySelector("[data-close=drawer]").onclick = closeDrawer;
 
+  /* ---------- 태그 (이 앱 안에 저장) ---------- */
+  var TAGS = store.get("tags", {});
+  function saveTags() { store.set("tags", TAGS); }
+  function tagsOf(p) { return TAGS[p] || []; }
+  function allTags() { var m = {}; Object.keys(TAGS).forEach(function (p) { TAGS[p].forEach(function (t) { m[t] = (m[t] || 0) + 1; }); }); return m; }
+  function cleanTag(x) { return String(x).replace(/^#+/, "").trim().replace(/\s+/g, "_").replace(/[^\p{L}\p{N}_\-]/gu, "").slice(0, 24); }
+  function remapTags(oldP, newP) {
+    var out = {}, ch = false;
+    Object.keys(TAGS).forEach(function (k) {
+      if (k === oldP || k.indexOf(oldP + "/") === 0) { out[newP + k.slice(oldP.length)] = TAGS[k]; ch = true; } else out[k] = TAGS[k];
+    });
+    if (ch) { TAGS = out; saveTags(); }
+  }
+  function openTagSheet(paths) {
+    var snap = {}, changed = false;
+    paths.forEach(function (p) { snap[p] = tagsOf(p).slice(); });
+    function state(t) { var n = paths.filter(function (p) { return tagsOf(p).indexOf(t) >= 0; }).length; return n === paths.length ? "all" : n ? "some" : "none"; }
+    function put(p, t, on) { var a = tagsOf(p).slice(), i = a.indexOf(t); if (on && i < 0) a.push(t); if (!on && i >= 0) a.splice(i, 1); if (a.length) TAGS[p] = a; else delete TAGS[p]; }
+    function html() {
+      var at = allTags(), names = Object.keys(at).sort(function (a, b) { return at[b] - at[a] || a.localeCompare(b, "ko"); });
+      return "<h3>" + (paths.length > 1 ? paths.length + "장에 태그" : "태그") + '</h3><div class="body"><div class="tagpick">' +
+        (names.length ? names.map(function (t) { return '<button class="' + state(t) + '" data-t="' + esc(t) + '">#' + esc(t) + "<small>" + at[t] + "</small></button>"; }).join("") : '<span style="color:var(--mute);font-size:13px">아직 태그가 없어요. 아래에 적어서 만들어 보세요.</span>') +
+        '</div><input type="text" id="tgIn" placeholder="새 태그 적고 엔터 (쉼표로 여러 개)"></div><div class="btns"><button class="pri" data-done="1">완료</button></div>';
+    }
+    return sheet(html(), function (el, close) {
+      function bind() {
+        el.querySelectorAll(".tagpick [data-t]").forEach(function (b) {
+          b.onclick = function () { var t = b.dataset.t, on = state(t) !== "all"; paths.forEach(function (p) { put(p, t, on); }); changed = true; saveTags(); el.innerHTML = html(); bind(); };
+        });
+        var inp = el.querySelector("#tgIn");
+        inp.onkeydown = function (e) {
+          if (e.key !== "Enter") return;
+          var list = inp.value.split(/[,，\n]/).map(cleanTag).filter(Boolean); if (!list.length) return;
+          list.forEach(function (t) { paths.forEach(function (p) { put(p, t, true); }); }); changed = true; saveTags(); el.innerHTML = html(); bind(); el.querySelector("#tgIn").focus();
+        };
+        el.querySelector("[data-done]").onclick = function () { close(); };
+      }
+      bind();
+    }).then(function () {
+      if (!changed) return;
+      pushUndo("태그 변경 " + paths.length + "장", function () { paths.forEach(function (p) { if (snap[p].length) TAGS[p] = snap[p]; else delete TAGS[p]; }); saveTags(); draw(); });
+      draw();
+    });
+  }
+
+  /* ---------- 왼쪽 메뉴 검색: 폴더·사진 이름(초성 가능)·태그 ---------- */
+  var dTok = 0, dTimer = null, ioD = null;
+  function relPath(p) { var r = rootOf(p); return (r ? r.name + p.slice(r.path.length) : p).split("/").join(" › "); }
+  function rowHtml(kind, x) {
+    var c = kind === "folder" ? colorOf(x.path) : null;
+    var th = kind === "folder" ? '<span class="fi' + (c ? " col" : "") + '"' + (c ? ' style="--fc:' + c + '"' : "") + ">" + FOLDER_SVG + "</span>" : '<img data-p="' + esc(x.path) + '" data-state="" alt="">';
+    var tg = kind === "file" ? tagsOf(x.path).map(function (t) { return "#" + t; }).join(" ") : "";
+    return '<div class="rrow" data-k="' + kind + '" data-p="' + esc(x.path) + '"><div class="rt">' + th + '</div><div class="rx"><div class="rn">' + esc(x.name) + '</div><div class="rp">' + esc(x.parent || "") + (tg ? " · " + esc(tg) : "") + "</div></div></div>";
+  }
+  function showSearch(html) {
+    $("#drawerTree").hidden = true; var r = $("#dres"); r.hidden = false; r.innerHTML = html;
+    if (ioD) ioD.disconnect();
+    ioD = new IntersectionObserver(ioCallback, { root: r, rootMargin: "300px 0px" });
+    r.querySelectorAll(".rrow").forEach(function (n) { ioD.observe(n); });
+  }
+  function matchTag(t, q) { var l = q.toLowerCase(), jamo = /^[ㄱ-ㅎ]+$/.test(q); return jamo ? cho(t).indexOf(q) >= 0 : t.toLowerCase().indexOf(l) >= 0; }
+  function runSearch(q) {
+    var tok = ++dTok, tagOnly = q.charAt(0) === "#", tq = tagOnly ? q.slice(1) : q;
+    var at = allTags(), names = Object.keys(at).filter(function (t) { return !tq || matchTag(t, tq); }).sort(function (a, b) { return at[b] - at[a]; });
+    var tagged = [];
+    if (tagOnly || names.length) Object.keys(TAGS).forEach(function (p) { if (TAGS[p].some(function (t) { return names.indexOf(t) >= 0; }) && (tagOnly || true)) tagged.push({ name: nameOf(p), path: p, parent: relPath(parentOf(p)) }); });
+    return (tagOnly || !q ? Promise.resolve({ folders: [], files: [] }) : FS.search({ q: q })).then(function (r) {
+      if (tok !== dTok) return;
+      var seen = {}, files = [];
+      tagged.slice(0, 200).concat(r.files).forEach(function (f) { if (!seen[f.path]) { seen[f.path] = 1; files.push(f); } });
+      var html = "";
+      if (names.length) html += '<div class="rsec">태그</div><div style="padding:0 6px">' + names.slice(0, 20).map(function (t) { return '<button class="tagchip" data-tag="' + esc(t) + '">#' + esc(t) + " " + at[t] + "</button>"; }).join("") + "</div>";
+      if (r.folders.length) html += '<div class="rsec">폴더 ' + r.folders.length + "</div>" + r.folders.map(function (x) { return rowHtml("folder", x); }).join("");
+      if (files.length) html += '<div class="rsec">사진 ' + files.length + (files.length >= 400 ? "+" : "") + "</div>" + files.map(function (x) { return rowHtml("file", x); }).join("");
+      if (!html) html = '<div class="rempty">찾는 결과가 없어요</div>';
+      showSearch(html);
+    }).catch(err);
+  }
+  $("#dq").addEventListener("input", function () {
+    clearTimeout(dTimer); var q = this.value.trim();
+    if (!q) { dTok++; $("#dres").hidden = true; $("#drawerTree").hidden = false; return; }
+    dTimer = setTimeout(function () { runSearch(q); }, 230);
+  });
+  $("#dres").addEventListener("click", function (e) {
+    var tg = e.target.closest("[data-tag]"); if (tg) { $("#dq").value = "#" + tg.dataset.tag; runSearch("#" + tg.dataset.tag); return; }
+    var row = e.target.closest(".rrow"); if (!row) return;
+    var p = row.dataset.p; closeDrawer();
+    if (row.dataset.k === "folder") { go(p); return; }
+    go(parentOf(p)).then(function () {
+      if (cardOn()) { var i = cardList().findIndex(function (f) { return f.path === p; }); if (i >= 0) { S.ci = i; drawCard(); } }
+      else openViewer(p);
+    });
+  });
+
   function pickFolder(title, disabledFn) {
-    return loadTrees(true).then(function (trees) {
+    return loadTrees(treeStruct).then(function (trees) {
       return sheet("<h3>" + esc(title) + '</h3><div class="body" id="pkTree"></div><div class="btns"><button data-x="c">취소</button><button data-x="mk">＋ 새 폴더</button><button class="pri" data-x="ok" disabled style="opacity:.4">여기로 이동</button></div>', function (el, close) {
         var opts = { open: {}, cur: null, disabled: disabledFn }, box = $("#pkTree", el), okb = $("[data-x=ok]", el);
         if (S.cwd) trees.forEach(function (t) { if (S.cwd === t.path || S.cwd.indexOf(t.path + "/") === 0) { var acc = t.path; opts.open[acc] = true; S.cwd.slice(t.path.length + 1).split("/").forEach(function (s) { if (s) { acc += "/" + s; opts.open[acc] = true; } }); } });
@@ -424,6 +526,12 @@
   }
 
   /* ---------- 동작: 이동 / 삭제 / 이름 / 새 폴더 ---------- */
+  function selHasFile() { return !S.trashView && S.files.some(function (f) { return S.sel.has(f.path); }); }
+  function actionsPaint() {
+    var rn = $("#actions [data-a=rename]"); rn.style.display = S.sel.size >= 1 && !S.trashView ? "" : "none"; rn.textContent = S.sel.size > 1 ? "이름 일괄" : "이름 바꾸기";
+    $("#actions [data-a=color]").style.display = selHasFolder() ? "" : "none";
+    $("#actions [data-a=tag]").style.display = selHasFile() ? "" : "none";
+  }
   function selHasFolder() { return !S.trashView && S.folders.some(function (f) { return S.sel.has(f.path); }); }
   function pickColor(paths) {
     var cur = paths.length === 1 ? colorOf(paths[0]) : null;
@@ -435,6 +543,7 @@
       saveColors(); draw(); drawB(); clearSel(); paintSel(); toast(r.c ? "폴더 색을 바꿨어요" : "기본 색으로 돌렸어요");
     });
   }
+  function doTag() { var ps = selPaths().filter(function (p) { return S.files.some(function (f) { return f.path === p; }); }); if (ps.length) openTagSheet(ps); }
   function doColor() { var ps = selPaths().filter(function (p) { return S.folders.some(function (f) { return f.path === p; }); }); if (ps.length) pickColor(ps); }
   function selPaths() { return Array.from(S.sel); }
   function noteRecent(dest) {
@@ -443,7 +552,7 @@
   function moveInto(paths, dest) {
     if (!paths.length) return Promise.resolve();
     return FS.move({ paths: paths, dest: dest }).then(function (r) {
-      clearSel(); noteRecent(dest); r.moved.forEach(function (m) { remapColors(m.from, m.to); });
+      clearSel(); noteRecent(dest); r.moved.forEach(function (m) { remapColors(m.from, m.to); remapTags(m.from, m.to); if (S.folders.some(function (f) { return f.path === m.from; })) treeStruct = true; });
       return Promise.all([reload(), refreshB()]).then(function () {
         var n = r.moved.length, bad = r.failed.length;
         var u = n ? pushUndo(n + "개를 ‘" + nameOf(dest) + "’(으)로 이동", function () { return undoMove(r.moved); }) : null;
@@ -460,16 +569,17 @@
     }).then(function (dest) { if (dest) return moveInto(paths, dest); }).catch(err);
   }
   function undoMove(moved) {
-    moved.forEach(function (m) { remapColors(m.to, m.from); });
+    moved.forEach(function (m) { remapColors(m.to, m.from); remapTags(m.to, m.from); });
     var by = {}; moved.forEach(function (m) { var d = parentOf(m.from); (by[d] = by[d] || []).push(m.to); });
     return Promise.all(Object.keys(by).map(function (d) { return FS.move({ paths: by[d], dest: d }); })).then(function () { return Promise.all([reload(), refreshB()]); }).then(function () { toast("되돌렸어요"); }).catch(err);
   }
-  function restoreIds(ids) { return FS.restore({ ids: ids }).then(function () { return Promise.all([reload(), refreshB()]); }).then(function () { toast("복원했어요"); }); }
+  function restoreIds(ids) { treeStruct = true; return FS.restore({ ids: ids }).then(function () { return Promise.all([reload(), refreshB()]); }).then(function () { toast("복원했어요"); }); }
   function doTrash() {
     var paths = selPaths(); if (!paths.length) return;
     var hasF = paths.some(function (p) { return S.folders.some(function (f) { return f.path === p; }); });
     (hasF ? confirmBox("폴더가 들어 있어요", "고른 폴더와 그 안의 사진이 모두 휴지통으로 가요.", "휴지통으로", true) : Promise.resolve(true)).then(function (ok) {
       if (!ok) return;
+      if (hasF) treeStruct = true;
       return FS.trash({ paths: paths }).then(function (r) {
         clearSel(); return reload().then(function () {
           var u = r.ids.length ? pushUndo(r.ids.length + "개 삭제", function () { return restoreIds(r.ids); }) : null;
@@ -488,23 +598,89 @@
       if (!n || n === nameOf(p)) return;
       var old = nameOf(p);
       return FS.rename({ path: p, name: n }).then(function (r) {
-        remap(p, r.path); remapColors(p, r.path); clearSel();
-        pushUndo("이름 ‘" + old + "’ → ‘" + n + "’", function () { return FS.rename({ path: r.path, name: old }).then(function (r2) { remap(r.path, r2.path); remapColors(r.path, r2.path); return Promise.all([reload(), refreshB()]); }).then(function () { toast("이름을 되돌렸어요"); }); });
+        remap(p, r.path); remapColors(p, r.path); remapTags(p, r.path); treeStruct = true; clearSel();
+        pushUndo("이름 ‘" + old + "’ → ‘" + n + "’", function () { return FS.rename({ path: r.path, name: old }).then(function (r2) { remap(r.path, r2.path); remapColors(r.path, r2.path); remapTags(r.path, r2.path); treeStruct = true; return Promise.all([reload(), refreshB()]); }).then(function () { toast("이름을 되돌렸어요"); }); });
         return Promise.all([reload(), refreshB()]);
       }).then(function () { toast("이름을 바꿨어요"); });
     }).catch(err);
   }
-  function doRename() { var p = selPaths()[0]; if (p) renameItem(p); }
+  /* ---------- 이름 일괄 바꾸기 (폴더·사진 여러 개) ---------- */
+  function openBatchRename() {
+    var items = order().filter(function (x) { return S.sel.has(x.path); });
+    if (items.length < 2) return;
+    var isDir = function (p) { return S.folders.some(function (f) { return f.path === p; }); };
+    var inUse = {}; S.folders.concat(S.files).forEach(function (x) { if (!S.sel.has(x.path)) inUse[x.name.toLowerCase()] = 1; });
+    var plan = [];
+    function field(id, label, ph, val, type) { return "<div><label>" + label + '</label><input id="' + id + '" type="' + (type || "text") + '" placeholder="' + esc(ph || "") + '" value="' + esc(val == null ? "" : val) + '"></div>'; }
+    var html = "<h3>이름 일괄 바꾸기 · " + items.length + "개</h3><div class=\"body\">" +
+      '<div class="brprev" id="brPrev" style="position:sticky;top:0;z-index:2;margin-bottom:8px"></div>' +
+      '<div class="brh">① 앞·뒤 지우기</div><div class="brf">' + field("brCut", "이 글자(기호) 앞까지 지우기", "예: _  또는  -") +
+      '<div><label>그 글자도 같이 지우기</label><select id="brKeep"><option value="1">예</option><option value="0">아니요</option></select></div>' +
+      field("brFront", "앞에서 N글자 지우기", "0", "", "number") + field("brBack", "뒤에서 N글자 지우기", "0", "", "number") + "</div>" +
+      '<div class="brh">② 글자 바꾸기</div><div class="brf">' + field("brFind", "찾을 글자", "") + field("brRep", "바꿀 글자", "비우면 지워요") + "</div>" +
+      '<div class="brh">③ 번호 붙이기</div><div class="brf">' +
+      '<div><label>번호</label><select id="brNum"><option value="0">안 붙임</option><option value="1">붙임</option></select></div>' +
+      '<div><label>자리</label><select id="brPos"><option value="front">이름 앞</option><option value="back">이름 뒤</option></select></div>' +
+      field("brStart", "시작 번호", "1", "1", "number") + '<div><label>자릿수</label><select id="brDig"><option value="1">1 (1,2,3)</option><option value="2">2 (01,02)</option><option value="3">3 (001)</option><option value="4">4 (0001)</option></select></div>' +
+      field("brSep", "번호와 이름 사이", "예: _", "_") + "</div>" +
+      '<div class="brh">④ 앞·뒤에 말 붙이기</div><div class="brf">' + field("brPre", "앞에 붙일 말", "") + field("brSuf", "뒤에 붙일 말", "") + "</div>" +
+      '</div>' +
+      '<div class="btns"><button data-v="">취소</button><button class="pri" id="brGo" data-v="1">바꾸기</button></div>';
+    return sheet(html, function (el, close) {
+      var F = function (id) { return $("#" + id, el).value; };
+      function calc() {
+        var cut = F("brCut"), keep = F("brKeep") === "1", fr = parseInt(F("brFront"), 10) || 0, bk = parseInt(F("brBack"), 10) || 0, find = F("brFind"), rep = F("brRep");
+        var numOn = F("brNum") === "1", pos = F("brPos"), st = parseInt(F("brStart"), 10); if (isNaN(st)) st = 1;
+        var dg = parseInt(F("brDig"), 10) || 1, sep = F("brSep"), pre = F("brPre"), suf = F("brSuf");
+        var seen = {}; plan = items.map(function (x, i) {
+          var dir = isDir(x.path), ext = "", n = x.name;
+          if (!dir) { var d = n.lastIndexOf("."); if (d > 0) { ext = n.slice(d); n = n.slice(0, d); } }
+          if (cut) { var ix = n.indexOf(cut); if (ix >= 0) n = n.slice(ix + (keep ? cut.length : 0)); }
+          if (fr > 0) n = n.slice(fr);
+          if (bk > 0) n = n.slice(0, Math.max(0, n.length - bk));
+          if (find) n = n.split(find).join(rep);
+          if (numOn) { var num = String(st + i); while (num.length < dg) num = "0" + num; n = pos === "front" ? num + sep + n : n + sep + num; }
+          n = (pre + n + suf).trim();
+          var nw = n + ext, low = nw.toLowerCase(), bad = !n || /[\/]/.test(n) || !!inUse[low] || !!seen[low];
+          seen[low] = 1;
+          return { path: x.path, old: x.name, nw: nw, bad: bad, same: nw === x.name };
+        });
+        var changed = plan.filter(function (r) { return !r.same; }), bads = plan.filter(function (r) { return r.bad && !r.same; });
+        var list = plan.slice(0, 40).map(function (r) { return '<div class="' + (r.bad && !r.same ? "bad" : "") + '"><span class="old">' + esc(r.old) + "</span> → " + (r.same ? '<span class="old">그대로</span>' : esc(r.nw || "(비어 있음)") + (r.bad ? " ⚠ 겹치거나 쓸 수 없어요" : "")) + "</div>"; }).join("");
+        $("#brPrev", el).innerHTML = (plan.length > 40 ? '<div class="old">앞 40개만 보여요</div>' : "") + list;
+        var go = $("#brGo", el); go.disabled = !changed.length || !!bads.length; go.style.opacity = go.disabled ? 0.4 : 1;
+        go.textContent = changed.length ? changed.length + "개 바꾸기" : "바꾸기";
+      }
+      el.querySelectorAll("input,select").forEach(function (n) { n.addEventListener("input", calc); n.addEventListener("change", calc); });
+      calc();
+      el.querySelectorAll(".btns button").forEach(function (b) { b.onclick = function () { if (b.disabled) return; close(b.dataset.v ? plan.slice() : undefined); }; });
+    }).then(function (rows) {
+      if (!rows) return;
+      var todo = rows.filter(function (r) { return !r.same; });
+      return FS.renameMany({ items: todo.map(function (r) { return { path: r.path, name: r.nw }; }) }).then(function (res) {
+        res.renamed.forEach(function (m) { remap(m.from, m.to); remapColors(m.from, m.to); remapTags(m.from, m.to); });
+        treeStruct = true; clearSel();
+        pushUndo("이름 " + res.renamed.length + "개 일괄 변경", function () {
+          return FS.renameMany({ items: res.renamed.map(function (m) { return { path: m.to, name: nameOf(m.from) }; }) }).then(function (r2) {
+            r2.renamed.forEach(function (m) { remap(m.from, m.to); remapColors(m.from, m.to); remapTags(m.from, m.to); });
+            return Promise.all([reload(), refreshB()]);
+          }).then(function () { toast("이름을 되돌렸어요"); });
+        });
+        return Promise.all([reload(), refreshB()]).then(function () { toast(res.renamed.length + "개의 이름을 바꿨어요"); });
+      });
+    }).catch(err);
+  }
+  function doRename() { var ps = selPaths(); if (ps.length > 1) openBatchRename(); else if (ps[0]) renameItem(ps[0]); }
   function newFolder(parent) {
     if (parent == null) { toast("폴더 안으로 들어가서 만들어 주세요"); return Promise.resolve(); }
     return askText("새 폴더 이름", "", "만들기").then(function (n) {
       if (!n) return;
-      return FS.mkdir({ parent: parent, name: n }).then(function (m) { S.fresh.add(m.path); return Promise.all([reload(), refreshB()]); }).then(function () { toast("폴더를 만들었어요"); });
+      return FS.mkdir({ parent: parent, name: n }).then(function (m) { S.fresh.add(m.path); treeStruct = true; return Promise.all([reload(), refreshB()]); }).then(function () { toast("폴더를 만들었어요"); });
     }).catch(err);
   }
   $("#actions").addEventListener("click", function (e) {
     var b = e.target.closest("[data-a]"); if (!b) return;
-    ({ move: doMove, trash: doTrash, rename: doRename, color: doColor })[b.dataset.a]();
+    ({ move: doMove, trash: doTrash, rename: doRename, color: doColor, tag: doTag })[b.dataset.a]();
   });
 
   /* ---------- 휴지통 ---------- */
@@ -603,13 +779,20 @@
   function cho(str) { return Array.from(str).map(function (c) { var k = c.charCodeAt(0) - 0xAC00; return k >= 0 && k < 11172 ? CHO[Math.floor(k / 588)] : c.toLowerCase(); }).join(""); }
   function byName(a, b) { return a.name.localeCompare(b.name, "ko", { numeric: true }); }
   var ioB = null;
+  function paintModes() {
+    $("#btnGrid").classList.toggle("on", !S.split && !cardOn());
+    $("#btnSplit").classList.toggle("on", S.split);
+    $("#btnCard").classList.toggle("on", cardOn());
+  }
+  $("#btnGrid").onclick = function () {
+    S.split = false; S.card = false; store.set("split", false); store.set("card", false); clearSel(); applySplit(); paintSel();
+  };
   function applySplit() {
     document.body.classList.toggle("split", S.split);
-    $("#btnSplit").classList.toggle("on", S.split);
     $("#scroll").style.flexGrow = S.split ? S.ratio : 1;
     $("#card").style.flexGrow = S.split ? S.ratio : 1;
     $("#paneB").style.flexGrow = 1 - S.ratio;
-    document.body.classList.toggle("card", cardOn()); $("#btnCard").classList.toggle("on", S.card);
+    document.body.classList.toggle("card", cardOn()); paintModes();
     if (S.split) {
       var start = S.cwd2 != null ? S.cwd2 : (S.cwd != null && rootOf(S.cwd) && rootOf(S.cwd).path !== S.cwd ? parentOf(S.cwd) : null);
       goB(start);
@@ -624,7 +807,6 @@
     }).catch(function (e) { err(e); if (S.cwd2 !== path) goB(null); });
   }
   function refreshB() { return S.split ? goB(S.cwd2, true) : Promise.resolve(); }
-  function relPath(p) { var r = rootOf(p); return (r ? r.name + p.slice(r.path.length) : p).split("/").join(" › "); }
   function ensureFlat() {
     if (B.flat) return Promise.resolve(B.flat);
     return loadTrees(false).then(function (trees) {
@@ -708,6 +890,7 @@
           else if (m === "mk") newFolder(p);
           else confirmBox("‘" + nameOf(p) + "’ 폴더를 지울까요?", "안의 사진까지 모두 휴지통으로 가요. 30일 안에는 복원할 수 있어요.", "휴지통으로", true).then(function (ok) {
             if (!ok) return;
+            treeStruct = true;
             return FS.trash({ paths: [p] }).then(function (r) {
               return Promise.all([reload(), refreshB()]).then(function () {
                 var u = r.ids.length ? pushUndo("폴더 ‘" + nameOf(p) + "’ 삭제", function () { return restoreIds(r.ids); }) : null;
@@ -760,6 +943,8 @@
     $("#cPos").textContent = f ? (S.ci + 1) + " / " + l.length : "";
     emp.textContent = f ? "" : "이 폴더에는 사진이 없어요";
     im.style.visibility = f ? "visible" : "hidden";
+    var tl = f ? tagsOf(f.path) : [];
+    $("#cTags").innerHTML = f ? tl.map(function (t) { return '<span class="tagchip">#' + esc(t) + "</span>"; }).join("") + '<button data-ct="1">＋ 태그</button>' : "";
     $("#cHint").textContent = S.split ? "위로 쓸면 삭제 · 아래로 쓸면 되돌리기 · 옆으로 넘기면 건너뛰기 · 아래 폴더를 누르면 옮기기" : "위로 쓸면 삭제 · 아래로 쓸면 되돌리기 · 옆으로 넘기면 건너뛰기";
     var rc = B.recent.filter(function (p) { return p !== S.cwd; }).slice(0, 10);
     $("#cRecent").innerHTML = rc.map(function (p) { return '<button data-p="' + esc(p) + '">' + esc(nameOf(p)) + "</button>"; }).join("");
@@ -783,6 +968,7 @@
   }
   $("#cPrev").onclick = function () { cardStep(-1); }; $("#cNext").onclick = function () { cardStep(1); };
   $("#cDel").onclick = cardDelete;
+  $("#cTags").addEventListener("click", function (e) { if (!e.target.closest("[data-ct]")) return; var f = cardList()[S.ci]; if (f) openTagSheet([f.path]).then(drawCard); });
   $("#cMove").onclick = function () {
     var f = cardList()[S.ci]; if (!f) return;
     pickLoop("‘" + f.name + "’을(를) 어디로 옮길까요?", function (p) { return p === S.cwd; }).then(function (dest) { if (dest) return cardMove(dest); }).catch(err);
@@ -791,7 +977,7 @@
   $("#cOpen").onclick = function () { var f = cardList()[S.ci]; if (f) FS.openExternal({ path: f.path }).catch(err); };
   $("#btnCard").onclick = function () {
     if (S.cwd == null) { toast("폴더 안으로 들어가서 써 주세요"); return; }
-    S.card = !S.card; if (S.card) { S.ci = 0; } store.set("card", S.card); clearSel(); paintSel(); document.body.classList.toggle("card", cardOn()); $("#btnCard").classList.toggle("on", S.card); if (cardOn()) drawCard(); drawB();
+    S.card = !S.card; if (S.card) { S.ci = 0; } store.set("card", S.card); clearSel(); paintSel(); document.body.classList.toggle("card", cardOn()); paintModes(); if (cardOn()) drawCard(); drawB();
   };
   (function () {
     var st = null, im = $("#cImg"), stage = $("#cStage");
@@ -839,7 +1025,7 @@
     if (!$("#viewer").hidden) { closeV(); return true; }
     if ($("#drawer").classList.contains("show")) { closeDrawer(); return true; }
     if ($(".bh").classList.contains("search")) { closeSearch(); return true; }
-    if (cardOn()) { S.card = false; store.set("card", false); document.body.classList.remove("card"); $("#btnCard").classList.remove("on"); return true; }
+    if (cardOn()) { S.card = false; store.set("card", false); document.body.classList.remove("card"); paintModes(); return true; }
     if (S.selOn || S.sel.size) { clearSel(); paintSel(); return true; }
     if (S.trashView) { go(S.cwd); return true; }
     if (S.cwd != null) { var r = rootOf(S.cwd); go(r && r.path === S.cwd ? null : parentOf(S.cwd)); return true; }
@@ -854,6 +1040,7 @@
     FS.roots().then(function (r) {
       S.home = r.home; S.roots = r.roots;
       var last = store.get("cwd", null);
+      setTimeout(function () { loadTrees(false).catch(function () {}); }, 900);
       return go(last && rootOf(last) ? last : null).then(applySplit);
     }).catch(function (e) { diag("시작 실패: " + ((e && e.message) || e)); });
   }
