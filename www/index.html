@@ -16,7 +16,7 @@ window.__diag = function (m) { var d = document.getElementById("diag"); if (!d) 
 window.addEventListener("error", function (e) { window.__diag("오류: " + e.message + " (" + String(e.filename || "").split("/").pop() + ":" + e.lineno + ")"); });
 window.addEventListener("unhandledrejection", function (e) { var r = e.reason; window.__diag("약속 오류: " + ((r && r.message) || r)); });
 </script>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="fg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a9c8ff"/><stop offset="1" stop-color="#6f9bea"/></linearGradient></defs></svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="fg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a9c8ff"/><stop offset="1" stop-color="#6f9bea"/></linearGradient><linearGradient id="fgl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs></svg>
 <div id="app">
   <header id="top">
     <div class="row main">
@@ -45,16 +45,19 @@ window.addEventListener("unhandledrejection", function (e) { var r = e.reason; w
       <div class="cbar">
         <button class="cb" id="cPrev">‹ 이전</button>
         <button class="cb danger" id="cDel">삭제</button>
+        <button class="cb" id="cMove">이동</button>
         <button class="cb" id="cOpen">갤러리</button>
         <button class="cb" id="cNext">다음 ›</button>
       </div>
-      <div class="chint">위로 쓸면 삭제 · 아래로 쓸면 되돌리기 · 옆으로 넘기면 건너뛰기 · 아래 폴더를 누르면 옮기기</div>
+      <div id="cRecent"></div>
+      <div class="chint" id="cHint">위로 쓸면 삭제 · 아래로 쓸면 되돌리기 · 옆으로 넘기면 건너뛰기 · 아래 폴더를 누르면 옮기기</div>
     </section>
     <div id="mid">
       <div id="grip" aria-label="칸 크기 조절"><i></i></div>
       <footer id="actions">
         <button class="act" data-a="move">이동</button>
         <button class="act" data-a="rename">이름 바꾸기</button>
+        <button class="act" data-a="color">색</button>
         <button class="act danger" data-a="trash">삭제</button>
       </footer>
     </div>

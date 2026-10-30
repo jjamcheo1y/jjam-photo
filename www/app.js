@@ -94,7 +94,20 @@
   function prune() { var ok = new Set(order().map(function (x) { return x.path; })); S.sel.forEach(function (p) { if (!ok.has(p)) S.sel.delete(p); }); if (!S.sel.size) S.selOn = false, S.range = false; }
 
   /* ---------- 그리기 ---------- */
-  var FOLDER_SVG = '<svg viewBox="0 0 24 24"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H9l2 2.2h7.5A2.5 2.5 0 0 1 21 8.7v8.8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>';
+  var COLORS = store.get("fcolor", {});
+  var PALETTE = [["빨강", "#ff5f57"], ["주황", "#ff9f0a"], ["노랑", "#f5c400"], ["초록", "#34c759"], ["청록", "#2cb9d6"], ["파랑", "#0a84ff"], ["보라", "#af52de"], ["분홍", "#ff6fa8"], ["회색", "#8e8e93"]];
+  function colorOf(p) { return COLORS[p] || null; }
+  function colAttr(p) { var c = colorOf(p); return c ? ' style="--fc:' + c + '"' : ""; }
+  function saveColors() { store.set("fcolor", COLORS); }
+  function remapColors(oldP, newP) {
+    var out = {}, ch = false;
+    Object.keys(COLORS).forEach(function (k) {
+      if (k === oldP || k.indexOf(oldP + "/") === 0) { out[newP + k.slice(oldP.length)] = COLORS[k]; ch = true; } else out[k] = COLORS[k];
+    });
+    if (ch) { COLORS = out; saveColors(); }
+  }
+  var FP = "M3 6.5A2.5 2.5 0 0 1 5.5 4H9l2 2.2h7.5A2.5 2.5 0 0 1 21 8.7v8.8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z";
+  var FOLDER_SVG = '<svg viewBox="0 0 24 24"><path class="f1" d="' + FP + '"/><path class="f2" d="' + FP + '"/></svg>';
   var io = null, thumbQ = [], active = 0;
   function pump() {
     while (active < 6 && thumbQ.length) {
@@ -124,7 +137,7 @@
     var on = S.sel.has(x.path) ? " on" : "", anc = S.anchor === x.path ? " anchor" : "";
     if (isFolder) {
       var meta = x.root ? "" : (x.media ? x.media + "장" : "") + (x.media && x.sub ? " · " : "") + (x.sub ? "폴더 " + x.sub : "") || "비었어요";
-      return '<div class="it folder' + on + anc + '" data-p="' + esc(x.path) + '" data-f="1"><div class="th"><span class="ck"></span>' + FOLDER_SVG + '</div><div class="lb">' + esc(x.name) + (meta ? "<small>" + esc(meta) + "</small>" : "") + "</div></div>";
+      return '<div class="it folder' + (colorOf(x.path) ? " col" : "") + on + anc + '"' + colAttr(x.path) + ' data-p="' + esc(x.path) + '" data-f="1"><div class="th"><span class="ck"></span>' + FOLDER_SVG + '</div><div class="lb">' + esc(x.name) + (meta ? "<small>" + esc(meta) + "</small>" : "") + "</div></div>";
     }
     return '<div class="it' + on + anc + '" data-p="' + esc(x.path) + '"><div class="th"><img data-p="' + esc(x.path) + '" data-state="" alt=""><span class="ck"></span>' + (x.video ? '<span class="vid">영상</span>' : "") + '</div><div class="lb">' + esc(x.name) + "</div></div>";
   }
@@ -132,6 +145,7 @@
     document.body.classList.toggle("selecting", S.selOn);
     document.body.classList.toggle("hasSel", S.sel.size > 0);
     document.body.classList.toggle("names", S.names);
+    document.body.classList.toggle("card", cardOn());
     document.documentElement.style.setProperty("--cols", S.cols);
     // 위쪽 길 표시
     var c = $("#crumb"), html = '<button data-go="">홈</button>';
@@ -153,6 +167,7 @@
     $("#hint").textContent = S.range ? (S.anchor ? "끝 사진을 눌러 주세요" : "시작 사진을 눌러 주세요") : "";
     var one = S.sel.size === 1 && !S.trashView;
     $('#actions [data-a=rename]').style.display = one ? "" : "none";
+    $('#actions [data-a=color]').style.display = selHasFolder() ? "" : "none";
     // 목록
     var g = $("#grid"); g.classList.toggle("trash", S.trashView);
     var list = S.trashView ? S.trash : null, h = "";
@@ -179,6 +194,7 @@
     $("#hint").classList.toggle("show", S.range);
     $("#hint").textContent = S.range ? (S.anchor ? "끝 사진을 눌러 주세요" : "시작 사진을 눌러 주세요") : "";
     $("#actions [data-a=rename]").style.display = S.sel.size === 1 && !S.trashView ? "" : "none";
+    $("#actions [data-a=color]").style.display = selHasFolder() ? "" : "none";
     document.querySelectorAll("#grid .it").forEach(function (n) {
       n.classList.toggle("on", S.sel.has(n.dataset.p));
       n.classList.toggle("anchor", S.anchor === n.dataset.p);
@@ -354,7 +370,7 @@
   function treeHtml(nodes, opts, depth) {
     return nodes.map(function (n) {
       var has = n.kids && n.kids.length, dis = opts.disabled && opts.disabled(n.path), open = opts.open[n.path];
-      return '<div class="tk" style="' + (depth ? "" : "margin-left:0") + '"><div class="tn' + (dis ? " dis" : "") + (opts.cur === n.path ? " cur" : "") + '" data-p="' + esc(n.path) + '"><span class="tg' + (open ? " open" : "") + '" data-t="1">' + (has ? '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>' : "") + '</span><span class="tl">' + esc(n.name) + "</span></div>" + (has && open ? treeHtml(n.kids, opts, depth + 1) : "") + "</div>";
+      return '<div class="tk" style="' + (depth ? "" : "margin-left:0") + '"><div class="tn' + (dis ? " dis" : "") + (opts.cur === n.path ? " cur" : "") + '" data-p="' + esc(n.path) + '"><span class="tg' + (open ? " open" : "") + '" data-t="1">' + (has ? '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>' : "") + '</span><span class="tl">' + (colorOf(n.path) ? '<i class="dot" style="background:' + colorOf(n.path) + '"></i>' : "") + esc(n.name) + "</span></div>" + (has && open ? treeHtml(n.kids, opts, depth + 1) : "") + "</div>";
     }).join("");
   }
   function bindTree(el, opts, onPick, redraw) {
@@ -408,6 +424,18 @@
   }
 
   /* ---------- 동작: 이동 / 삭제 / 이름 / 새 폴더 ---------- */
+  function selHasFolder() { return !S.trashView && S.folders.some(function (f) { return S.sel.has(f.path); }); }
+  function pickColor(paths) {
+    var cur = paths.length === 1 ? colorOf(paths[0]) : null;
+    return sheet('<h3>폴더 색</h3><div class="swatches">' + PALETTE.map(function (c) { return '<button style="background:' + c[1] + '" data-c="' + c[1] + '" aria-label="' + c[0] + '" class="' + (cur === c[1] ? "on" : "") + '"></button>'; }).join("") + '<button class="none" data-c="">기본</button></div>', function (el, close) {
+      el.querySelectorAll("[data-c]").forEach(function (b) { b.onclick = function () { close({ c: b.dataset.c }); }; });
+    }).then(function (r) {
+      if (!r) return;
+      paths.forEach(function (p) { if (r.c) COLORS[p] = r.c; else delete COLORS[p]; });
+      saveColors(); draw(); drawB(); clearSel(); paintSel(); toast(r.c ? "폴더 색을 바꿨어요" : "기본 색으로 돌렸어요");
+    });
+  }
+  function doColor() { var ps = selPaths().filter(function (p) { return S.folders.some(function (f) { return f.path === p; }); }); if (ps.length) pickColor(ps); }
   function selPaths() { return Array.from(S.sel); }
   function noteRecent(dest) {
     B.recent = [dest].concat(B.recent.filter(function (p) { return p !== dest; })).slice(0, 24); store.set("recent", B.recent);
@@ -415,7 +443,7 @@
   function moveInto(paths, dest) {
     if (!paths.length) return Promise.resolve();
     return FS.move({ paths: paths, dest: dest }).then(function (r) {
-      clearSel(); noteRecent(dest);
+      clearSel(); noteRecent(dest); r.moved.forEach(function (m) { remapColors(m.from, m.to); });
       return Promise.all([reload(), refreshB()]).then(function () {
         var n = r.moved.length, bad = r.failed.length;
         var u = n ? pushUndo(n + "개를 ‘" + nameOf(dest) + "’(으)로 이동", function () { return undoMove(r.moved); }) : null;
@@ -432,6 +460,7 @@
     }).then(function (dest) { if (dest) return moveInto(paths, dest); }).catch(err);
   }
   function undoMove(moved) {
+    moved.forEach(function (m) { remapColors(m.to, m.from); });
     var by = {}; moved.forEach(function (m) { var d = parentOf(m.from); (by[d] = by[d] || []).push(m.to); });
     return Promise.all(Object.keys(by).map(function (d) { return FS.move({ paths: by[d], dest: d }); })).then(function () { return Promise.all([reload(), refreshB()]); }).then(function () { toast("되돌렸어요"); }).catch(err);
   }
@@ -459,8 +488,8 @@
       if (!n || n === nameOf(p)) return;
       var old = nameOf(p);
       return FS.rename({ path: p, name: n }).then(function (r) {
-        remap(p, r.path); clearSel();
-        pushUndo("이름 ‘" + old + "’ → ‘" + n + "’", function () { return FS.rename({ path: r.path, name: old }).then(function (r2) { remap(r.path, r2.path); return Promise.all([reload(), refreshB()]); }).then(function () { toast("이름을 되돌렸어요"); }); });
+        remap(p, r.path); remapColors(p, r.path); clearSel();
+        pushUndo("이름 ‘" + old + "’ → ‘" + n + "’", function () { return FS.rename({ path: r.path, name: old }).then(function (r2) { remap(r.path, r2.path); remapColors(r.path, r2.path); return Promise.all([reload(), refreshB()]); }).then(function () { toast("이름을 되돌렸어요"); }); });
         return Promise.all([reload(), refreshB()]);
       }).then(function () { toast("이름을 바꿨어요"); });
     }).catch(err);
@@ -475,7 +504,7 @@
   }
   $("#actions").addEventListener("click", function (e) {
     var b = e.target.closest("[data-a]"); if (!b) return;
-    ({ move: doMove, trash: doTrash, rename: doRename })[b.dataset.a]();
+    ({ move: doMove, trash: doTrash, rename: doRename, color: doColor })[b.dataset.a]();
   });
 
   /* ---------- 휴지통 ---------- */
@@ -578,7 +607,7 @@
     document.body.classList.toggle("split", S.split);
     $("#btnSplit").classList.toggle("on", S.split);
     $("#scroll").style.flexGrow = S.split ? S.ratio : 1;
-    $("#card").style.flexGrow = S.ratio;
+    $("#card").style.flexGrow = S.split ? S.ratio : 1;
     $("#paneB").style.flexGrow = 1 - S.ratio;
     document.body.classList.toggle("card", cardOn()); $("#btnCard").classList.toggle("on", S.card);
     if (S.split) {
@@ -613,7 +642,7 @@
   }
   function btHtml(x) {
     var meta = x.parent != null ? x.parent : (x.root ? "" : (x.media > 0 ? x.media + "장" : "") + (x.media > 0 && x.sub ? " · " : "") + (x.sub ? "폴더 " + x.sub : ""));
-    return '<div class="it folder bt' + (x.cover ? " hascover" : "") + '" data-p="' + esc(x.path) + '" data-f="1"><div class="th">' + (x.cover ? '<img data-p="' + esc(x.cover) + '" data-state="" alt="">' : "") + FOLDER_SVG +
+    return '<div class="it folder bt' + (x.cover ? " hascover" : "") + (colorOf(x.path) ? " col" : "") + '"' + colAttr(x.path) + ' data-p="' + esc(x.path) + '" data-f="1"><div class="th">' + (x.cover ? '<img data-p="' + esc(x.cover) + '" data-state="" alt="">' : "") + FOLDER_SVG +
       '</div><div class="lb">' + esc(x.name) + (meta ? "<small>" + esc(meta) + "</small>" : "") + "</div></div>";
   }
   function bHint() {
@@ -669,12 +698,13 @@
     if (navigator.vibrate) try { navigator.vibrate(10); } catch (e) {}
     if (c === true) { if (S.cwd2 == null) { toast("폴더 안으로 들어가서 만들어 주세요"); return; } addMenu(x, y, S.cwd2); return; }
     var p = c.dataset.p, isRoot = S.roots.some(function (r) { return r.path === p; }); bSup = true; setTimeout(function () { bSup = false; }, 700);
-    popAt(x, y, '<button class="mi" data-m="open">폴더 열기</button><div class="msep"></div>' + (isRoot ? "" : '<button class="mi" data-m="rn">이름 바꾸기</button>') + '<button class="mi" data-m="mk">＋ 이 안에 새 폴더</button>' + (isRoot ? "" : '<div class="msep"></div><button class="mi" data-m="del" style="color:var(--danger)">휴지통으로</button>'), function (el) {
+    popAt(x, y, '<button class="mi" data-m="open">폴더 열기</button><div class="msep"></div>' + (isRoot ? "" : '<button class="mi" data-m="rn">이름 바꾸기</button>') + '<button class="mi" data-m="col">폴더 색</button><button class="mi" data-m="mk">＋ 이 안에 새 폴더</button>' + (isRoot ? "" : '<div class="msep"></div><button class="mi" data-m="del" style="color:var(--danger)">휴지통으로</button>'), function (el) {
       el.querySelectorAll("[data-m]").forEach(function (b) {
         b.onclick = function () {
           var m = b.dataset.m; closePop();
           if (m === "open") { B.mode = "name"; store.set("bmode", "name"); goB(p); }
           else if (m === "rn") renameItem(p);
+          else if (m === "col") pickColor([p]);
           else if (m === "mk") newFolder(p);
           else confirmBox("‘" + nameOf(p) + "’ 폴더를 지울까요?", "안의 사진까지 모두 휴지통으로 가요. 30일 안에는 복원할 수 있어요.", "휴지통으로", true).then(function (ok) {
             if (!ok) return;
@@ -710,7 +740,7 @@
   paintSel = function () { _paint(); if (S.split) bHint(); };
 
   /* ---------- 카드 모드: 사진 한 장씩, 위로 쓸면 삭제, 아래 폴더를 누르면 이동 ---------- */
-  function cardOn() { return !!(S.split && S.card && !S.trashView && S.cwd != null); }
+  function cardOn() { return !!(S.card && !S.trashView && S.cwd != null); }
   function cardList() { return S.files.filter(function (f) { return !f.video; }); }
   var cardTok = 0, cardCache = {};
   function cardData(path) {
@@ -730,7 +760,10 @@
     $("#cPos").textContent = f ? (S.ci + 1) + " / " + l.length : "";
     emp.textContent = f ? "" : "이 폴더에는 사진이 없어요";
     im.style.visibility = f ? "visible" : "hidden";
-    ["#cPrev", "#cDel", "#cOpen", "#cNext"].forEach(function (id) { $(id).disabled = !f; });
+    $("#cHint").textContent = S.split ? "위로 쓸면 삭제 · 아래로 쓸면 되돌리기 · 옆으로 넘기면 건너뛰기 · 아래 폴더를 누르면 옮기기" : "위로 쓸면 삭제 · 아래로 쓸면 되돌리기 · 옆으로 넘기면 건너뛰기";
+    var rc = B.recent.filter(function (p) { return p !== S.cwd; }).slice(0, 10);
+    $("#cRecent").innerHTML = rc.map(function (p) { return '<button data-p="' + esc(p) + '">' + esc(nameOf(p)) + "</button>"; }).join("");
+    ["#cPrev", "#cDel", "#cMove", "#cOpen", "#cNext"].forEach(function (id) { $(id).disabled = !f; });
     if (!f) { im.removeAttribute("src"); return; }
     var tok = ++cardTok;
     im.classList.remove("anim"); im.style.transform = ""; im.style.opacity = 1;
@@ -750,10 +783,15 @@
   }
   $("#cPrev").onclick = function () { cardStep(-1); }; $("#cNext").onclick = function () { cardStep(1); };
   $("#cDel").onclick = cardDelete;
+  $("#cMove").onclick = function () {
+    var f = cardList()[S.ci]; if (!f) return;
+    pickLoop("‘" + f.name + "’을(를) 어디로 옮길까요?", function (p) { return p === S.cwd; }).then(function (dest) { if (dest) return cardMove(dest); }).catch(err);
+  };
+  $("#cRecent").addEventListener("click", function (e) { var b = e.target.closest("button"); if (b) cardMove(b.dataset.p); });
   $("#cOpen").onclick = function () { var f = cardList()[S.ci]; if (f) FS.openExternal({ path: f.path }).catch(err); };
   $("#btnCard").onclick = function () {
     if (S.cwd == null) { toast("폴더 안으로 들어가서 써 주세요"); return; }
-    S.card = !S.card; store.set("card", S.card); clearSel(); paintSel(); document.body.classList.toggle("card", cardOn()); $("#btnCard").classList.toggle("on", S.card); if (cardOn()) drawCard(); drawB();
+    S.card = !S.card; if (S.card) { S.ci = 0; } store.set("card", S.card); clearSel(); paintSel(); document.body.classList.toggle("card", cardOn()); $("#btnCard").classList.toggle("on", S.card); if (cardOn()) drawCard(); drawB();
   };
   (function () {
     var st = null, im = $("#cImg"), stage = $("#cStage");
@@ -801,6 +839,7 @@
     if (!$("#viewer").hidden) { closeV(); return true; }
     if ($("#drawer").classList.contains("show")) { closeDrawer(); return true; }
     if ($(".bh").classList.contains("search")) { closeSearch(); return true; }
+    if (cardOn()) { S.card = false; store.set("card", false); document.body.classList.remove("card"); $("#btnCard").classList.remove("on"); return true; }
     if (S.selOn || S.sel.size) { clearSel(); paintSel(); return true; }
     if (S.trashView) { go(S.cwd); return true; }
     if (S.cwd != null) { var r = rootOf(S.cwd); go(r && r.path === S.cwd ? null : parentOf(S.cwd)); return true; }

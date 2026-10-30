@@ -206,8 +206,8 @@ body.split #mid{background:var(--gloss);-webkit-backdrop-filter:var(--blur);back
 #pop .opt{margin-bottom:10px}
 /* 카드 모드 */
 #card{display:none;flex-direction:column;background:var(--bg);padding-top:calc(var(--safeT) + 52px);min-height:0}
-body.split.card #scroll{display:none}
-body.split.card #card{display:flex;flex:1 1 0}
+body.card #scroll{display:none}
+body.card #card{display:flex;flex:1 1 0}
 .ctop{display:flex;align-items:center;gap:8px;padding:6px 14px;font-size:13px;flex:none}
 .ctop b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
 .ctop span{color:var(--mute)}
@@ -226,7 +226,7 @@ body.selecting.hasSel #btnCard{display:none}
 /* 크게 보기 확대 */
 #vImg{transition:none;will-change:transform;touch-action:none}
 #vImg.anim{transition:transform .22s ease-out}
-body:not(.split) #grip,body:not(.split) #btnCard{display:none!important}
+body:not(.split) #grip{display:none!important}
 
 /* ===================== 맥 감성 손질: 모서리 작게, 아주 옅은 그라데이션 버튼, 메뉴는 목록형 ===================== */
 :root{
@@ -278,3 +278,23 @@ body:not(.split) #btnCard{display:none}
 #btnCard{display:inline-grid;background:none;box-shadow:none;border-radius:6px;padding:0}
 body.selecting.hasSel #btnCard{display:grid}
 body.split #btnCard,body.card #btnCard{display:grid;place-items:center}
+
+/* 카드 모드(일반 화면) */
+body:not(.split) #btnCard{display:inline-grid}
+body.split #cMove,body.split #cRecent{display:none}
+#cRecent{display:flex;gap:6px;overflow-x:auto;padding:0 10px 6px;flex:none;scrollbar-width:none}
+#cRecent::-webkit-scrollbar{display:none}
+#cRecent:empty{display:none}
+#cRecent button{flex:none;padding:6px 12px;border-radius:6px;background:var(--btn-bg);box-shadow:var(--btn-hl),0 0 0 1px var(--btn-bd);font-size:13px}
+#card{padding-bottom:var(--safeB)}
+.cb{font-size:13px}
+/* 폴더 색 */
+.it.folder .th svg .f2{display:none}
+.it.col .th svg .f1{fill:var(--fc)}
+.it.col .th svg .f2{display:block;fill:url(#fgl)}
+.it.col .th svg{filter:drop-shadow(0 2px 3px rgba(0,0,0,.28))}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:7px;vertical-align:baseline;box-shadow:0 0 0 1px rgba(0,0,0,.15)}
+.swatches{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;padding:6px 4px 12px}
+.swatches button{height:44px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12),inset 0 -8px 12px rgba(0,0,0,.12);position:relative}
+.swatches button.none{background:var(--bg);color:var(--mute);font-size:12px;border-radius:10px}
+.swatches button.on::after{content:"✓";position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,.4)}
