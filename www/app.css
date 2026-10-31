@@ -473,3 +473,7 @@ body:not(.split) #btnCard,#btnCard{display:grid!important;place-items:center}
 .dspt small{font-size:11px;color:var(--mute)}
 .dspc{flex:none;font-size:14px;font-weight:600;color:var(--accent);font-variant-numeric:tabular-nums}
 #drawerTree[hidden]+*,#dUns[hidden]{display:none}
+.dim{opacity:.35}
+#bUp{flex:none}
+.tools.left .ib.dim{opacity:.35}
+.tools.left{gap:0}

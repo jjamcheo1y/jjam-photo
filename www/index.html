@@ -22,6 +22,7 @@ window.addEventListener("unhandledrejection", function (e) { var r = e.reason; w
     <div class="row main">
       <div class="tools left" role="group" aria-label="왼쪽 도구">
         <button class="ib" id="btnTree" aria-label="폴더 메뉴"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+        <button class="ib" id="btnUp" aria-label="상위 폴더"><svg viewBox="0 0 24 24"><path d="M9 14l-5-5 5-5M4 9h9a6 6 0 0 1 6 6v4"/></svg></button>
       </div>
       <div id="titlebox"><b id="ttl"></b><nav id="crumb"></nav></div>
       <div id="modes" role="group" aria-label="보기 방식">
@@ -73,6 +74,7 @@ window.addEventListener("unhandledrejection", function (e) { var r = e.reason; w
     </div>
     <section id="paneB">
       <div class="bh">
+        <button class="ib sm" id="bUp" aria-label="상위 폴더"><svg viewBox="0 0 24 24"><path d="M9 14l-5-5 5-5M4 9h9a6 6 0 0 1 6 6v4"/></svg></button>
         <nav id="crumbB"></nav>
         <input id="bQ" type="search" placeholder="폴더 검색 (ㅊㅅ 같은 초성도 돼요)" autocomplete="off">
         <button class="ib sm" id="bAdd" aria-label="새 폴더"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
