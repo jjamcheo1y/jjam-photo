@@ -19,7 +19,7 @@
     home: "", roots: [], cwd: null, folders: [], files: [],
     sort: store.get("sort", { k: "date", d: -1 }), cols: store.get("cols", 3), names: store.get("names", true),
     sel: new Set(), selOn: false, range: false, anchor: null, last: null,
-    trashView: false, trash: [], viewer: null, hideEmpty: store.get("hideEmpty", true), tagView: null, unsorted: false, unsCount: null, album: store.get("album", null), autoMax: store.get("autoMax", 4), fresh: new Set(), card: store.get("card", false), ci: 0
+    trashView: false, trash: [], viewer: null, hideEmpty: store.get("hideEmpty", true), tagView: null, unsorted: false, unsCount: null, album: store.get("album", null), autoMax: store.get("autoMax", 4), fresh: new Set(store.get("fresh", [])), card: store.get("card", false), ci: 0
   };
 
   /* ---------- 알림 / 창 ---------- */
@@ -74,7 +74,15 @@
       return r * d || cmpName(a, b);
     });
   }
-  function vis(f) { return !S.hideEmpty || f.has !== false || S.fresh.has(f.path); }
+  function saveFresh() { store.set("fresh", Array.from(S.fresh).slice(-800)); }
+  function keep(p) { S.fresh.add(p); saveFresh(); }
+  function remapFresh(oldP, newP) {
+    var out = [], ch = false;
+    S.fresh.forEach(function (k) { if (k === oldP || k.indexOf(oldP + "/") === 0) { out.push(newP + k.slice(oldP.length)); ch = true; } else out.push(k); });
+    if (ch) { S.fresh = new Set(out); saveFresh(); }
+  }
+  /* 사진 없는 폴더 숨기기: 사진이 없고 하위 폴더도 없는 빈 폴더만 숨김(하위 폴더를 가진 폴더, 내가 만들거나 이름 바꾼 폴더는 항상 보임) */
+  function vis(f) { return !S.hideEmpty || f.has !== false || (f.sub || 0) > 0 || (f.kids && f.kids.length > 0) || S.fresh.has(f.path); }
   function pruneCopy(n) { var c = {}; Object.keys(n).forEach(function (k) { c[k] = n[k]; }); c.kids = (n.kids || []).filter(vis).map(pruneCopy); return c; }
   function prune2(n) { n.kids = (n.kids || []).filter(vis).map(prune2); return n; }
   function order() { return S.folders.concat(S.files); }
@@ -101,6 +109,7 @@
   function colAttr(p) { var c = colorOf(p); return c ? ' style="--fc:' + c + '"' : ""; }
   function saveColors() { store.set("fcolor", COLORS); }
   function remapColors(oldP, newP) {
+    remapFresh(oldP, newP);
     var out = {}, ch = false;
     Object.keys(COLORS).forEach(function (k) {
       if (k === oldP || k.indexOf(oldP + "/") === 0) { out[newP + k.slice(oldP.length)] = COLORS[k]; ch = true; } else out[k] = COLORS[k];
@@ -608,7 +617,7 @@
     return pickFolder(title, dis).then(function (r) {
       if (r && r.mk) {
         return askText("새 폴더 이름", "", "만들기").then(function (n) {
-          return (n ? FS.mkdir({ parent: r.mk, name: n }).then(function (m) { S.fresh.add(m.path); }) : Promise.resolve()).then(function () { return pickLoop(title, dis); });
+          return (n ? FS.mkdir({ parent: r.mk, name: n }).then(function (m) { keep(m.path); }) : Promise.resolve()).then(function () { return pickLoop(title, dis); });
         });
       }
       return r;
@@ -684,11 +693,12 @@
     B.recent = B.recent.map(f); store.set("recent", B.recent);
   }
   function renameItem(p) {
+    var wasFolder = S.folders.some(function (f) { return f.path === p; });
     return askText("이름 바꾸기", nameOf(p), "바꾸기").then(function (n) {
       if (!n || n === nameOf(p)) return;
       var old = nameOf(p);
       return FS.rename({ path: p, name: n }).then(function (r) {
-        remap(p, r.path); remapColors(p, r.path); remapTags(p, r.path); treeStruct = true; clearSel();
+        remap(p, r.path); remapColors(p, r.path); remapTags(p, r.path); if (wasFolder) keep(r.path); treeStruct = true; clearSel();
         pushUndo("이름 ‘" + old + "’ → ‘" + n + "’", function () { return FS.rename({ path: r.path, name: old }).then(function (r2) { remap(r.path, r2.path); remapColors(r.path, r2.path); remapTags(r.path, r2.path); treeStruct = true; return Promise.all([reload(), refreshB()]); }).then(function () { toast("이름을 되돌렸어요"); }); });
         return Promise.all([reload(), refreshB()]);
       }).then(function () { toast("이름을 바꿨어요"); });
@@ -747,8 +757,9 @@
     }).then(function (rows) {
       if (!rows) return;
       var todo = rows.filter(function (r) { return !r.same; });
+      var wasF = {}; todo.forEach(function (r) { wasF[r.path] = S.folders.some(function (f) { return f.path === r.path; }); });
       return FS.renameMany({ items: todo.map(function (r) { return { path: r.path, name: r.nw }; }) }).then(function (res) {
-        res.renamed.forEach(function (m) { remap(m.from, m.to); remapColors(m.from, m.to); remapTags(m.from, m.to); });
+        res.renamed.forEach(function (m) { remap(m.from, m.to); remapColors(m.from, m.to); remapTags(m.from, m.to); if (wasF[m.from]) keep(m.to); });
         treeStruct = true; clearSel();
         pushUndo("이름 " + res.renamed.length + "개 일괄 변경", function () {
           return FS.renameMany({ items: res.renamed.map(function (m) { return { path: m.to, name: nameOf(m.from) }; }) }).then(function (r2) {
@@ -765,7 +776,7 @@
     if (parent == null) { toast("폴더 안으로 들어가서 만들어 주세요"); return Promise.resolve(); }
     return askText("새 폴더 이름", "", "만들기").then(function (n) {
       if (!n) return;
-      return FS.mkdir({ parent: parent, name: n }).then(function (m) { S.fresh.add(m.path); treeStruct = true; return Promise.all([reload(), refreshB()]); }).then(function () { toast("폴더를 만들었어요"); });
+      return FS.mkdir({ parent: parent, name: n }).then(function (m) { keep(m.path); treeStruct = true; return Promise.all([reload(), refreshB()]); }).then(function () { toast("폴더를 만들었어요"); });
     }).catch(err);
   }
   $("#actions").addEventListener("click", function (e) {
@@ -1154,5 +1165,5 @@
     }).catch(function (e) { diag("시작 실패: " + ((e && e.message) || e)); });
   }
   checkAccess().then(function (g) { if (g) start(); });
-  window.__jp = { S: S, go: go, reload: reload };
+  window.__jp = { S: S, go: go, reload: reload, FS: FS };
 })();
