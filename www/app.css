@@ -490,3 +490,8 @@ body:not(.split) #btnCard,#btnCard{display:grid!important;place-items:center}
 @keyframes bind{0%{left:-38%}100%{left:100%}}
 #busy.det .btxt u{animation:none;width:var(--w,0%);transition:width .2s}
 #bscroll.drop{box-shadow:inset 0 0 0 3px var(--accent);background:var(--accent-bg)}
+
+/* 상위 폴더 버튼은 메뉴 묶음과 따로 */
+.tools.upg{background:var(--accent-bg);margin-left:2px}
+.tools.upg .ib{color:var(--accent)}
+.tools.upg .ib.dim{opacity:.35}
