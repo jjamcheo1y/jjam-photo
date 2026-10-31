@@ -477,3 +477,15 @@ body:not(.split) #btnCard,#btnCard{display:grid!important;place-items:center}
 #bUp{flex:none}
 .tools.left .ib.dim{opacity:.35}
 .tools.left{gap:0}
+
+/* ===================== 작업 중 표시(스피너·퍼센트·경과 시간) ===================== */
+#busy{position:fixed;left:50%;top:calc(var(--safeT) + 60px);transform:translate(-50%,-8px);z-index:75;display:flex;gap:11px;align-items:center;padding:10px 16px 10px 12px;border-radius:12px;background:var(--glass);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);box-shadow:var(--shadow);border:1px solid var(--line);opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;min-width:170px;max-width:88vw}
+#busy.show{opacity:1;transform:translate(-50%,0)}
+.bspin{flex:none;width:20px;height:20px;border-radius:50%;border:3px solid var(--hover);border-top-color:var(--accent);animation:bspin .8s linear infinite}
+@keyframes bspin{to{transform:rotate(360deg)}}
+.btxt{display:flex;flex-direction:column;gap:6px;min-width:0;flex:1}
+#busyT{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btxt i{display:block;height:4px;border-radius:2px;background:var(--hover);overflow:hidden;position:relative}
+.btxt u{position:absolute;top:0;bottom:0;left:0;width:38%;background:var(--accent);border-radius:2px;text-decoration:none;animation:bind 1.1s ease-in-out infinite}
+@keyframes bind{0%{left:-38%}100%{left:100%}}
+#busy.det .btxt u{animation:none;width:var(--w,0%);transition:width .2s}

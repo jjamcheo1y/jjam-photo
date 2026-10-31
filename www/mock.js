@@ -33,7 +33,7 @@ function MockFS() {
     return t;
   }
   function hasM(n) { return n.kids.some(function (k) { return k.dir ? hasM(k) : true; }); }
-  function wait(v) { return new Promise(function (r) { setTimeout(function () { r(JSON.parse(JSON.stringify(v))); }, 40); }); }
+  function wait(v) { return new Promise(function (r) { setTimeout(function () { r(JSON.parse(JSON.stringify(v))); }, window.__lag || 40); }); }
   function svg(hue, label, size) {
     var s = "<svg xmlns='http://www.w3.org/2000/svg' width='" + size + "' height='" + size + "'><rect width='100%' height='100%' fill='hsl(" + hue + ",42%,62%)'/><circle cx='70%' cy='32%' r='" + size / 8 + "' fill='hsl(" + hue + ",50%,82%)'/><path d='M0 " + size + "L" + size * .4 + " " + size * .5 + "L" + size * .7 + " " + size * .8 + "L" + size * .85 + " " + size * .65 + "L" + size + " " + size + "Z' fill='hsl(" + hue + ",40%,40%)'/><text x='8' y='" + (size - 10) + "' font-size='" + Math.max(12, size / 16) + "' fill='white'>" + label + "</text></svg>";
     return "data:image/svg+xml;utf8," + encodeURIComponent(s);

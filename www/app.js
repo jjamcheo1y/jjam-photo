@@ -4,8 +4,58 @@
   var $ = function (s, e) { return (e || document).querySelector(s); };
   var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
   var native = !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
-  var FS;
-  try { FS = native ? Capacitor.registerPlugin("PhotoFs") : MockFS(); } catch (e) { window.__diag && window.__diag("플러그인 준비 실패: " + e.message); throw e; }
+  var FS0;
+  try { FS0 = native ? Capacitor.registerPlugin("PhotoFs") : MockFS(); } catch (e) { window.__diag && window.__diag("플러그인 준비 실패: " + e.message); throw e; }
+
+  /* ---------- 작업 중 표시: 0.25초 넘게 걸리면 스피너·경과 시간(옮기기 등은 퍼센트)을 보여 줌 ---------- */
+  var BZ = { n: 0, label: "", pct: null, t0: 0, timer: null, wait: null };
+  function busyPaint() {
+    var el = document.getElementById("busy"); if (!el) return;
+    var sec = Math.floor((Date.now() - BZ.t0) / 1000);
+    document.getElementById("busyT").textContent = BZ.label + (BZ.pct != null ? " " + Math.round(BZ.pct * 100) + "%" : sec >= 3 ? " · " + sec + "초" : "…");
+    el.classList.toggle("det", BZ.pct != null);
+    if (BZ.pct != null) document.getElementById("busyBar").style.setProperty("--w", Math.round(BZ.pct * 100) + "%");
+  }
+  function busyStart(label) {
+    BZ.n++;
+    if (BZ.n === 1) { BZ.label = label; BZ.pct = null; BZ.t0 = Date.now(); BZ.wait = setTimeout(function () { var el = document.getElementById("busy"); if (el) { el.classList.add("show"); busyPaint(); BZ.timer = setInterval(busyPaint, 400); } }, 250); }
+  }
+  function busyEnd() {
+    BZ.n = Math.max(0, BZ.n - 1);
+    if (BZ.n === 0) { clearTimeout(BZ.wait); clearInterval(BZ.timer); var el = document.getElementById("busy"); if (el) el.classList.remove("show"); }
+  }
+  function busyPct(p, label) { BZ.pct = p; if (label) BZ.label = label; busyPaint(); }
+  /* 사진이 많으면 한 번에 하지 않고 20개씩 나눠 보내며 진행률을 보여 줌 */
+  function chunked(a, key, size, call, merge, label) {
+    var list = a[key], N = list.length;
+    if (N <= size) return call(a);
+    var out = {}, i = 0; busyPct(0, label);
+    function step() {
+      if (i >= N) return Promise.resolve(out);
+      var part = {}; Object.keys(a).forEach(function (k) { part[k] = a[k]; }); part[key] = list.slice(i, i + size);
+      return call(part).then(function (r) { merge(out, r); i += size; busyPct(Math.min(1, i / N)); return step(); }, function (e) { merge(out, { failed: list.slice(i).map(function (p) { return { path: p, error: (e && e.message) || "실패" }; }) }); return out; });
+    }
+    return step();
+  }
+  var FS = {};
+  var BUSY_LABEL = {
+    list: "폴더 읽는 중", tree: "폴더 목록 읽는 중", search: "검색 중", unsorted: "미분류 사진 찾는 중", stat: "태그 사진 불러오는 중",
+    move: "사진 옮기는 중", trash: "휴지통으로 보내는 중", restore: "복원하는 중", purge: "지우는 중", renameMany: "이름 바꾸는 중",
+    mkdir: "폴더 만드는 중", rename: "이름 바꾸는 중", listTrash: "휴지통 읽는 중"
+  };
+  ["hasAccess", "requestAccess", "roots", "list", "tree", "thumb", "move", "mkdir", "rename", "renameMany", "trash", "listTrash", "restore", "purge", "openExternal", "search", "stat", "unsorted"].forEach(function (m) {
+    FS[m] = function (a) {
+      var lab = BUSY_LABEL[m];
+      if (!lab || (a && a.quiet)) return FS0[m](a);
+      busyStart(lab);
+      var p;
+      if (m === "move") p = chunked(a, "paths", 20, FS0.move, function (o, r) { o.moved = (o.moved || []).concat(r.moved || []); o.failed = (o.failed || []).concat(r.failed || []); }, lab);
+      else if (m === "trash") p = chunked(a, "paths", 20, FS0.trash, function (o, r) { o.ids = (o.ids || []).concat(r.ids || []); o.failed = (o.failed || []).concat(r.failed || []); }, lab);
+      else if (m === "restore") p = chunked(a, "ids", 20, FS0.restore, function (o, r) { o.restored = (o.restored || []).concat(r.restored || []); o.failed = (o.failed || []).concat(r.failed || []); }, lab);
+      else p = FS0[m](a);
+      return Promise.resolve(p).then(function (r) { busyEnd(); return r; }, function (e) { busyEnd(); throw e; });
+    };
+  });
   var AppPlug = null;
   try { if (native) AppPlug = Capacitor.registerPlugin("App"); } catch (e) { AppPlug = null; }
   var store = {
@@ -387,10 +437,10 @@
 
   /* ---------- 폴더 트리 (왼쪽 메뉴 / 이동할 곳 고르기): 캐시해 두고 바로 보여 준 뒤 뒤에서 새로 읽음 ---------- */
   var treeCache = null, treePromise = null, treeStamp = 0, treeStruct = false, dOpen = {};
-  function loadTrees(force) {
+  function loadTrees(force, quiet) {
     if (treeCache && !force) return Promise.resolve(treeCache);
     if (treePromise) return treePromise;
-    treePromise = Promise.all(S.roots.map(function (r) { return FS.tree({ path: r.path, depth: 8 }).then(function (x) { x.tree.name = r.name; return x.tree; }); }))
+    treePromise = Promise.all(S.roots.map(function (r) { return FS.tree({ path: r.path, depth: 8, quiet: quiet }).then(function (x) { x.tree.name = r.name; return x.tree; }); }))
       .then(function (t) { treeCache = t; treeStamp = Date.now(); treeStruct = false; treePromise = null; return t; }, function (e) { treePromise = null; throw e; });
     return treePromise;
   }
@@ -420,7 +470,7 @@
     function render(raw) { var trees = S.hideEmpty ? raw.map(pruneCopy) : raw; openPathOf(trees, opts); el.innerHTML = treeHtml(trees, opts, 0); bindTree(el, opts, function (p) { closeDrawer(); go(p); }, function () { render(raw); }); }
     if (treeCache) {
       render(treeCache);
-      if (treeStruct || Date.now() - treeStamp > 20000) loadTrees(true).then(function (t) { if ($("#drawer").classList.contains("show") && $("#dq").value.trim() === "") render(t); }).catch(function () {});
+      if (treeStruct || Date.now() - treeStamp > 20000) loadTrees(true, true).then(function (t) { if ($("#drawer").classList.contains("show") && $("#dq").value.trim() === "") render(t); }).catch(function () {});
     } else {
       el.innerHTML = '<div class="rempty">폴더를 불러오는 중…</div>';
       loadTrees(true).then(render).catch(err);
@@ -482,11 +532,16 @@
     return pr ? pr.path + "/앨범" : "";
   }
   function paintUns() { var t = S.unsCount == null ? "" : String(S.unsCount); $("#dUnsC").textContent = t; $("#tpUnsC").textContent = t; }
-  function countUns() { return FS.unsorted({ exclude: albumPath(), countOnly: true }).then(function (r) { S.unsCount = r.total; paintUns(); }).catch(function () {}); }
+  function countUns() { return FS.unsorted({ exclude: albumPath(), countOnly: true, quiet: true }).then(function (r) { S.unsCount = r.total; paintUns(); }).catch(function () {}); }
   function loadUnsorted() {
     return FS.unsorted({ exclude: albumPath() }).then(function (r) {
-      S.folders = []; S.files = r.files; S.unsCount = r.total; paintUns(); sortList(); prune(); draw(); $("#scroll").scrollTop = 0;
-      if (r.total > r.files.length) toast("최신 " + r.files.length + "장만 보여요 (전체 " + r.total + "장)");
+      S.folders = []; S.files = r.files; S.unsCount = r.total; paintUns(); sortList(); prune();
+      function done() { if (r.total > r.files.length) toast("최신 " + r.files.length + "장만 보여요 (전체 " + r.total + "장)"); }
+      if (r.files.length > 800) {
+        busyStart("목록 그리는 중 (" + r.files.length + "장)");
+        return new Promise(function (ok) { setTimeout(function () { try { draw(); $("#scroll").scrollTop = 0; } finally { busyEnd(); done(); ok(); } }, 40); });
+      }
+      draw(); $("#scroll").scrollTop = 0; done();
     });
   }
   function openUnsorted() {
@@ -1159,7 +1214,7 @@
     FS.roots().then(function (r) {
       S.home = r.home; S.roots = r.roots;
       var last = store.get("cwd", null);
-      setTimeout(function () { loadTrees(false).catch(function () {}); }, 900);
+      setTimeout(function () { loadTrees(false, true).catch(function () {}); }, 900);
       setTimeout(countUns, 1800);
       return go(last && rootOf(last) ? last : null).then(applySplit);
     }).catch(function (e) { diag("시작 실패: " + ((e && e.message) || e)); });
