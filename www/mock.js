@@ -14,7 +14,7 @@ function MockFS() {
   }
   var tree = dir("", [
     dir("DCIM", [dir("Camera", files(60, "IMG_", 9)), dir("Screenshots", files(25, "Screenshot_"))]),
-    dir("Pictures", [dir("여행", [dir("제주", files(30, "jeju_")), dir("부산", files(12, "busan_")), ].concat(files(3, "여행_"))), dir("앨범", files(80, "album_")), dir("빈폴더")]),
+    dir("Pictures", [dir("여행", [dir("제주", files(30, "jeju_")), dir("부산", files(12, "busan_")), ].concat(files(3, "여행_"))), dir("앨범", files(80, "album_").concat([dir("1차", [dir("샤인", files(6, "shine_")), dir("아리", files(4, "ari_"))])])), dir("빈폴더")]),
     dir("Download", files(10, "dl_")),
   ]);
   var trash = [];
@@ -41,6 +41,12 @@ function MockFS() {
   function pathNodeByTmp(par, name) { return node(par).kids.filter(function (k) { return k.name === "\u0000" + name; })[0]; }
   function pathNode(p) { if (p.indexOf("/.jjamtrash/") > 0) { var id = p.split("/")[p.split("/").length - 2]; var t = trash.filter(function (x) { return x.id === id; })[0]; return t && t.node; } return node(p); }
   return {
+    unsorted: function (o) {
+      var ex = o.exclude || "", out = [];
+      function walk(n, p) { n.kids.forEach(function (k) { var kp = p + "/" + k.name; if (k.dir) { if (kp !== ex) walk(k, kp); } else out.push({ name: k.name, path: kp, mtime: k.mtime, size: k.size, video: !!k.video }); }); }
+      tree.kids.forEach(function (r) { var rp = HOME + "/" + r.name; if (rp !== ex) walk(r, rp); });
+      return wait({ total: out.length, files: o.countOnly ? [] : out });
+    },
     stat: function (o) {
       var out = [];
       o.paths.forEach(function (p) { var n = node(p); if (n && !n.dir) out.push({ name: n.name, path: p, mtime: n.mtime, size: n.size, video: !!n.video }); });

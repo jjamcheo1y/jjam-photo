@@ -537,6 +537,58 @@ public class PhotoFsPlugin extends Plugin {
         return n;
     }
 
+    /** 앨범(정리 폴더) 밖에 있는 사진/영상 전부 — 최신순, 최대 8000개 */
+    private void walkOutside(File dir, String exclude, List<File> out, int depth) {
+        if (depth < 0) return;
+        File[] kids = dir.listFiles();
+        if (kids == null) return;
+        for (File k : kids) {
+            String n = k.getName();
+            if (n.startsWith(".")) continue;
+            if (k.isDirectory()) {
+                if (!exclude.isEmpty() && k.getPath().equals(exclude)) continue;
+                walkOutside(k, exclude, out, depth - 1);
+            } else if (isMedia(n)) out.add(k);
+        }
+    }
+
+    @PluginMethod
+    public void unsorted(final PluginCall call) {
+        pool.execute(() -> {
+            try {
+                String ex = String.valueOf(call.getString("exclude", ""));
+                if (!ex.isEmpty()) { try { ex = new File(ex).getCanonicalPath(); } catch (Exception ignore) {} }
+                boolean countOnly = Boolean.TRUE.equals(call.getBoolean("countOnly", false));
+                List<File> all = new ArrayList<>();
+                for (String r : new String[]{"DCIM", "Pictures", "Download", "Movies"}) {
+                    File d = new File(root, r);
+                    if (d.isDirectory()) {
+                        if (!ex.isEmpty() && d.getPath().equals(ex)) continue;
+                        walkOutside(d, ex, all, 14);
+                    }
+                }
+                JSObject res = new JSObject();
+                res.put("total", all.size());
+                JSArray files = new JSArray();
+                if (!countOnly) {
+                    java.util.Collections.sort(all, (x, y) -> Long.compare(y.lastModified(), x.lastModified()));
+                    int n = Math.min(all.size(), 8000);
+                    for (int i = 0; i < n; i++) {
+                        File f = all.get(i);
+                        JSObject o = new JSObject();
+                        o.put("name", f.getName()); o.put("path", f.getPath()); o.put("mtime", f.lastModified()); o.put("size", f.length());
+                        o.put("video", VID.contains(ext(f.getName())));
+                        files.put(o);
+                    }
+                }
+                res.put("files", files);
+                call.resolve(res);
+            } catch (Exception e) {
+                call.reject(String.valueOf(e.getMessage()));
+            }
+        });
+    }
+
     /** 경로 여러 개의 이름·크기·날짜를 한 번에 (태그 모아 보기용). 없어진 파일은 건너뜀 */
     @PluginMethod
     public void stat(final PluginCall call) {
