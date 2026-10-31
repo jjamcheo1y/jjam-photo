@@ -65,6 +65,49 @@
 
   function diag(msg) { if (window.__diag) window.__diag(msg); }
 
+
+  /* ---------- 테마(대표 색 바꾸기) ---------- */
+  var THEMES = [["파랑", "#3d8bfd"], ["남색", "#5b5bd6"], ["보라", "#a35cf0"], ["분홍", "#f0589a"], ["빨강", "#ec5448"], ["주황", "#f08a1c"], ["초록", "#2fb35a"], ["청록", "#17aaa3"], ["하늘", "#1aa3dc"], ["회색", "#6b7280"]];
+  function hexToHsl(hex) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(hex || ""); if (!m) return null;
+    var n = parseInt(m[1], 16), r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+    var mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn, h = 0, sat = 0;
+    if (d) { sat = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn); h = mx === r ? ((g - b) / d + (g < b ? 6 : 0)) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; }
+    return { h: h, s: sat, l: l };
+  }
+  function hsl(h, sat, l, a) { return "hsl(" + Math.round(h) + " " + Math.round(Math.max(0, Math.min(1, sat)) * 100) + "% " + Math.round(Math.max(0, Math.min(1, l)) * 100) + "%" + (a != null ? " / " + a : "") + ")"; }
+  var THEME_KEYS = ["--accent", "--accent-bg", "--ac1", "--ac2", "--acbd", "--fsh", "--lite", "--folder"];
+  function applyTheme(hex) {
+    var root = document.documentElement, f0 = document.getElementById("fg0"), f1 = document.getElementById("fg1");
+    var c = hex ? hexToHsl(hex) : null;
+    if (!c) { THEME_KEYS.forEach(function (k) { root.style.removeProperty(k); }); if (f0) { f0.setAttribute("stop-color", "#a9c8ff"); f1.setAttribute("stop-color", "#6f9bea"); } return; }
+    var dark = !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    var lf = Math.min(c.l, 0.55) + (dark ? 0.03 : 0), lm = dark ? Math.min(0.74, Math.min(c.l, 0.6) + 0.12) : Math.min(c.l, 0.55), sat = Math.max(0.35, c.s);
+    var set = function (k, v) { root.style.setProperty(k, v); };
+    set("--accent", hsl(c.h, sat, lm)); set("--accent-bg", hsl(c.h, sat, lm, dark ? 0.24 : 0.14));
+    set("--ac1", hsl(c.h, sat, lf + 0.08)); set("--ac2", hsl(c.h, sat, lf - 0.05)); set("--acbd", hsl(c.h, sat, lf - 0.22, 0.7));
+    set("--fsh", "hsla(" + Math.round(c.h) + ",45%,28%,.35)"); set("--lite", hsl(c.h, sat, Math.min(0.86, lm + 0.2))); set("--folder", hsl(c.h, 0.55, 0.68));
+    if (f0) { f0.setAttribute("stop-color", hsl(c.h, 0.8, 0.82)); f1.setAttribute("stop-color", hsl(c.h, 0.62, 0.64)); }
+  }
+  var THEME = store.get("theme", null);
+  applyTheme(THEME);
+  if (window.matchMedia) { try { window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function () { applyTheme(THEME); }); } catch (e) {} }
+  function openThemeSheet() {
+    function html() {
+      return '<h3>테마 색</h3><div class="body"><div class="swatches">' + THEMES.map(function (t) { return '<button style="background:' + t[1] + '" data-c="' + t[1] + '" aria-label="' + t[0] + '" class="' + (THEME === t[1] || (!THEME && t[1] === "#3d8bfd") ? "on" : "") + '"></button>'; }).join("") + '</div>' +
+        '<div class="themecust"><label>직접 고르기</label><input type="color" id="thC" value="' + (THEME || "#3d8bfd") + '"><button class="thr" id="thReset">기본(파랑)으로</button></div></div><div class="btns"><button class="pri" data-done="1">완료</button></div>';
+    }
+    return sheet(html(), function (el, close) {
+      function bind() {
+        el.querySelectorAll(".swatches [data-c]").forEach(function (b) { b.onclick = function () { THEME = b.dataset.c; store.set("theme", THEME); applyTheme(THEME); el.innerHTML = html(); bind(); }; });
+        el.querySelector("#thC").oninput = function () { THEME = this.value; store.set("theme", THEME); applyTheme(THEME); el.querySelectorAll(".swatches .on").forEach(function (x) { x.classList.remove("on"); }); };
+        el.querySelector("#thReset").onclick = function () { THEME = null; store.set("theme", null); applyTheme(null); el.innerHTML = html(); bind(); };
+        el.querySelector("[data-done]").onclick = function () { close(); };
+      }
+      bind();
+    });
+  }
+
   var S = {
     home: "", roots: [], cwd: null, folders: [], files: [],
     sort: store.get("sort", { k: "date", d: -1 }), cols: store.get("cols", 3), names: store.get("names", true),
@@ -395,7 +438,7 @@
   $("#popScrim").onclick = closePop;
   $("#btnUndo").onclick = function () { var u = UNDO[UNDO.length - 1]; if (u) runUndo(u); };
   $("#btnMore").onclick = function () {
-    popMenu(this, '<button class="mi" data-m="mk">＋ 새 폴더 만들기</button><button class="mi" data-m="trash">휴지통 보기</button><div class="msep"></div><button class="mi' + (S.hideEmpty ? " on" : "") + '" data-m="empty">사진 없는 폴더 숨기기</button><div class="msep"></div><button class="mi" data-m="album">정리 폴더 지정 (지금: ' + esc(nameOf(albumPath()) || "없음") + ')</button><button class="mi" data-m="re">새로고침</button><button class="mi" data-m="perm">파일 접근 권한 확인</button>', function (el) {
+    popMenu(this, '<button class="mi" data-m="mk">＋ 새 폴더 만들기</button><button class="mi" data-m="trash">휴지통 보기</button><div class="msep"></div><button class="mi' + (S.hideEmpty ? " on" : "") + '" data-m="empty">사진 없는 폴더 숨기기</button><div class="msep"></div><button class="mi" data-m="album">정리 폴더 지정 (지금: ' + esc(nameOf(albumPath()) || "없음") + ')</button><button class="mi" data-m="theme">테마 색…</button><button class="mi" data-m="re">새로고침</button><button class="mi" data-m="perm">파일 접근 권한 확인</button>', function (el) {
       el.querySelectorAll("[data-m]").forEach(function (b) {
         b.onclick = function () {
           var m = b.dataset.m; closePop();
@@ -403,6 +446,7 @@
           else if (m === "album") pickLoop("‘미분류’ 기준이 될 정리 폴더를 골라 주세요", function () { return false; }).then(function (d) { if (!d) return; S.album = d; store.set("album", d); S.unsCount = null; paintUns(); toast("정리 폴더: " + nameOf(d)); countUns(); if (S.unsorted) loadUnsorted(); }).catch(err);
           else if (m === "trash") openTrash();
           else if (m === "empty") { S.hideEmpty = !S.hideEmpty; store.set("hideEmpty", S.hideEmpty); treeCache = null; B.flat = null; Promise.all([reload(), refreshB()]).then(function () { toast(S.hideEmpty ? "사진 없는 폴더를 숨겼어요" : "사진 없는 폴더도 보여요"); }); }
+          else if (m === "theme") openThemeSheet();
           else if (m === "re") reload().then(refreshB);
           else if (m === "perm") checkAccess(true);
         };

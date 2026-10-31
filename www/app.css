@@ -113,7 +113,7 @@ body.selecting.hasSel.trashv #tactions{display:flex}
 .big{background:var(--accent);color:#fff;padding:14px 26px;border-radius:10px;font-weight:700;font-size:16px}
 #toast{position:fixed;left:50%;bottom:calc(92px + var(--safeB));transform:translate(-50%,20px);background:#2b2b32;color:#f2f2f4;padding:11px 16px;border-radius:10px;font-size:14px;opacity:0;pointer-events:none;transition:.2s;z-index:60;max-width:90vw;display:flex;gap:12px;align-items:center;white-space:nowrap}
 #toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
-#toast button{color:#8ec0ff;font-weight:700}
+#toast button{color:var(--lite);font-weight:700}
 #diag{position:fixed;left:12px;right:12px;top:calc(70px + var(--safeT));z-index:70;background:var(--card);border:1px solid var(--danger);color:var(--ink);border-radius:10px;padding:12px;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-all;user-select:text;-webkit-user-select:text;display:none;max-height:60vh;overflow:auto}
 #diag.show{display:block}
 #grid.trash .it .nm{display:block}
@@ -176,10 +176,10 @@ body.dragging,body.dragging *{user-select:none;-webkit-user-select:none}
 #panes{position:absolute;inset:0;display:flex;flex-direction:column}
 #scroll{padding-top:calc(var(--safeT) + 66px)}
 #hint{position:absolute;left:0;right:0;top:calc(var(--safeT) + 53px);z-index:4;-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
-#top .row.sel{background:linear-gradient(to bottom,#58a1ff,#3a82f2)}
+#top .row.sel{background:linear-gradient(to bottom,var(--ac1),var(--ac2))}
 .th{box-shadow:0 1px 3px rgba(0,0,0,.18)}
 .it.folder .th{background:linear-gradient(to bottom,rgba(255,255,255,.7),rgba(0,0,0,.025)),var(--panel)}
-.it.folder .th svg{fill:url(#fg);filter:drop-shadow(0 2px 3px rgba(40,70,140,.35))}
+.it.folder .th svg{fill:url(#fg);filter:drop-shadow(0 2px 3px var(--fsh))}
 .bt .th svg{fill:url(#fg)}
 #actions,#tactions{background:var(--glass);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);box-shadow:var(--shadow)}
 body.split #mid{background:var(--gloss);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
@@ -192,11 +192,11 @@ body.split #mid{background:var(--gloss);-webkit-backdrop-filter:var(--blur);back
 .act,.pill,.opt button,.mi,#sheet .btns button,#bSort,.cb,#btnCard{background:var(--bg);box-shadow:inset 0 0 0 1px var(--line)}
 .sel .pill{background:rgba(255,255,255,.22);box-shadow:none}
 .sel .pill.on{background:#fff}
-.opt button.on,#sheet .btns button.pri{background:linear-gradient(to bottom,#58a1ff,#3a82f2);color:#fff;box-shadow:none}
+.opt button.on,#sheet .btns button.pri{background:linear-gradient(to bottom,var(--ac1),var(--ac2));color:#fff;box-shadow:none}
 #sheet .btns button.pri{color:#fff}
 .mi{padding:13px 12px;margin-bottom:6px}
 .mi.on::after{content:"✓";float:right;color:var(--accent)}
-.big{background:linear-gradient(to bottom,#58a1ff,#3a82f2)}
+.big{background:linear-gradient(to bottom,var(--ac1),var(--ac2))}
 /* 위에서 펼쳐지는 작은 메뉴(⋯, 정렬) */
 #popScrim{position:fixed;inset:0;z-index:25;background:transparent}
 #popScrim[hidden]{display:none}
@@ -232,7 +232,8 @@ body:not(.split) #grip{display:none!important}
 :root{
   --btn-bg:linear-gradient(to bottom,rgba(255,255,255,.62),rgba(255,255,255,0)),var(--bg);
   --btn-bd:rgba(0,0,0,.18); --btn-hl:inset 0 1px 0 rgba(255,255,255,.7);
-  --btn-blue:linear-gradient(to bottom,#5aa5ff,#3b83f3);
+  --btn-blue:linear-gradient(to bottom,var(--ac1),var(--ac2));
+  --ac1:#5aa5ff; --ac2:#3b83f3; --acbd:rgba(20,70,160,.55); --fsh:rgba(40,70,140,.35); --lite:#8ec0ff;
 }
 @media (prefers-color-scheme:dark){:root{
   --btn-bg:linear-gradient(to bottom,rgba(255,255,255,.1),rgba(255,255,255,0)),var(--panel);
@@ -243,7 +244,7 @@ body:not(.split) #grip{display:none!important}
 .act.danger,.cb.danger{color:var(--danger)}
 .sel .pill{background:rgba(255,255,255,.2);box-shadow:inset 0 0 0 1px rgba(255,255,255,.35);color:#fff}
 .sel .pill.on{background:#fff;color:var(--accent);box-shadow:none}
-#sheet .btns button.pri,.big{background:var(--btn-blue);color:#fff;box-shadow:0 0 0 1px rgba(20,70,160,.55),0 1px 2px rgba(0,0,0,.15)}
+#sheet .btns button.pri,.big{background:var(--btn-blue);color:#fff;box-shadow:0 0 0 1px var(--acbd),0 1px 2px rgba(0,0,0,.15)}
 .ib{border-radius:6px;width:38px}
 .ib:active,.ib.on{background:var(--hover)}
 .ib.on{background:var(--accent-bg);color:var(--accent)}
@@ -254,7 +255,7 @@ body:not(.split) #grip{display:none!important}
 .opt .lbl + button{margin-left:0;border-radius:6px 0 0 6px}
 .opt button:last-child{border-radius:0 6px 6px 0}
 .opt .lbl + button:last-child{border-radius:6px}
-.opt button.on{position:relative;z-index:1;background:var(--btn-blue);color:#fff;box-shadow:0 0 0 1px rgba(20,70,160,.55)}
+.opt button.on{position:relative;z-index:1;background:var(--btn-blue);color:#fff;box-shadow:0 0 0 1px var(--acbd)}
 /* 점 세 개·정렬 메뉴: 맥 메뉴처럼 목록 */
 #pop{padding:5px;border-radius:10px;min-width:210px}
 #pop .mi{background:none;box-shadow:none;border-radius:5px;padding:7px 10px;margin:0;font-size:14px;font-weight:400}
@@ -322,7 +323,7 @@ body.split #actions{background:var(--btn-bg)}
 #modes button{width:30px;height:28px;border-radius:6px;display:grid;place-items:center;color:var(--mute);background:none;box-shadow:none;padding:0}
 #modes button svg{width:17px;height:17px}
 #modes button.on{background:var(--card);color:var(--accent);box-shadow:0 1px 3px rgba(0,0,0,.2),0 0 0 .5px rgba(0,0,0,.08)}
-@media (prefers-color-scheme:dark){#modes button.on{background:#55555e;color:#8ec0ff}}
+@media (prefers-color-scheme:dark){#modes button.on{background:#55555e;color:var(--lite)}}
 #scroll{padding-top:calc(var(--safeT) + 58px)}
 #card{padding-top:calc(var(--safeT) + 46px)}
 #hint{top:calc(var(--safeT) + 46px)}
@@ -333,7 +334,7 @@ body:not(.split) #btnCard,#btnCard{display:grid!important;place-items:center}
 #dq{width:100%;padding:8px 11px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-size:14px;outline:none}
 #dq:focus{border-color:var(--accent)}
 .tn .fi{width:30px;height:34px;display:grid;place-items:center;flex:none;position:relative}
-.tn .fi svg{width:21px;height:21px;fill:url(#fg);stroke:none;filter:drop-shadow(0 1px 1.5px rgba(40,70,140,.35));transform:none}
+.tn .fi svg{width:21px;height:21px;fill:url(#fg);stroke:none;filter:drop-shadow(0 1px 1.5px var(--fsh));transform:none}
 .tn .fi .f2{display:none}
 .tn .fi.col svg .f1{fill:var(--fc)}
 .tn .fi.col svg .f2{display:block;fill:url(#fgl)}
@@ -366,7 +367,7 @@ body:not(.split) #btnCard,#btnCard{display:grid!important;place-items:center}
 .ctags .tagchip{flex:none;margin:0}
 .tagpick{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px;max-height:34vh;overflow:auto}
 .tagpick button{padding:6px 12px;border-radius:6px;background:var(--btn-bg);box-shadow:var(--btn-hl),0 0 0 1px var(--btn-bd);font-size:13px}
-.tagpick button.all{background:var(--btn-blue);color:#fff;box-shadow:0 0 0 1px rgba(20,70,160,.55)}
+.tagpick button.all{background:var(--btn-blue);color:#fff;box-shadow:0 0 0 1px var(--acbd)}
 .tagpick button.some{background:var(--accent-bg);color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
 .tagpick small{opacity:.7;margin-left:4px}
 /* 이름 일괄 바꾸기 */
@@ -418,7 +419,7 @@ body:not(.split) #btnCard,#btnCard{display:grid!important;place-items:center}
 .tgrow .tgk{color:var(--mute);font-size:12px;font-variant-numeric:tabular-nums}
 .tpfoot{display:flex;gap:8px;padding:10px 12px calc(12px + var(--safeB));flex:none;border-top:1px solid var(--line)}
 .tpfoot .pill{flex:1;padding:11px 0;font-size:14px}
-.tpfoot .pri2{background:var(--btn-blue);color:#fff;box-shadow:0 0 0 1px rgba(20,70,160,.55)}
+.tpfoot .pri2{background:var(--btn-blue);color:#fff;box-shadow:0 0 0 1px var(--acbd)}
 #top .row.sel{height:50px}
 
 /* ===================== 태그 패널: 오른쪽에서 열리는 맥 인스펙터 느낌 ===================== */
@@ -452,7 +453,7 @@ body:not(.split) #btnCard,#btnCard{display:grid!important;place-items:center}
 .tp-empty small{font-size:12px;opacity:.9}
 .tp-foot{display:flex;gap:8px;align-items:center;padding:10px 14px calc(14px + var(--safeB));border-top:1px solid var(--line)}
 .tp-clear{flex:none;padding:10px 4px;font-size:13px;color:var(--accent);background:none;box-shadow:none}
-.tp-go{flex:1;padding:12px 0;border-radius:9px;font-weight:600;font-size:15px;color:#fff;background:var(--btn-blue);box-shadow:0 0 0 1px rgba(20,70,160,.55),0 1px 2px rgba(0,0,0,.15)}
+.tp-go{flex:1;padding:12px 0;border-radius:9px;font-weight:600;font-size:15px;color:#fff;background:var(--btn-blue);box-shadow:0 0 0 1px var(--acbd),0 1px 2px rgba(0,0,0,.15)}
 .tp-go.dim{opacity:.45}
 .tp-go:active{filter:brightness(.93)}
 /* 태그 칩에 태그마다 다른 색 */
@@ -495,3 +496,10 @@ body:not(.split) #btnCard,#btnCard{display:grid!important;place-items:center}
 .tools.upg{background:var(--accent-bg);margin-left:2px}
 .tools.upg .ib{color:var(--accent)}
 .tools.upg .ib.dim{opacity:.35}
+
+.themecust{display:flex;align-items:center;gap:10px;margin:6px 2px 12px}
+.themecust label{font-size:13px;color:var(--mute)}
+.themecust input[type=color]{width:46px;height:34px;border:0;padding:0;border-radius:8px;background:none}
+.themecust .thr{margin-left:auto;padding:7px 12px;border-radius:6px;font-size:13px;background:var(--btn-bg);box-shadow:var(--btn-hl),0 0 0 1px var(--btn-bd)}
+.swatches button{width:44px;justify-self:center}
+.swatches button.none{width:auto;padding:0 12px}

@@ -16,7 +16,7 @@ window.__diag = function (m) { var d = document.getElementById("diag"); if (!d) 
 window.addEventListener("error", function (e) { window.__diag("오류: " + e.message + " (" + String(e.filename || "").split("/").pop() + ":" + e.lineno + ")"); });
 window.addEventListener("unhandledrejection", function (e) { var r = e.reason; window.__diag("약속 오류: " + ((r && r.message) || r)); });
 </script>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="fg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a9c8ff"/><stop offset="1" stop-color="#6f9bea"/></linearGradient><linearGradient id="fgl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs></svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="fg" x1="0" y1="0" x2="0" y2="1"><stop id="fg0" offset="0" stop-color="#a9c8ff"/><stop id="fg1" offset="1" stop-color="#6f9bea"/></linearGradient><linearGradient id="fgl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs></svg>
 <div id="app">
   <header id="top">
     <div class="row main">
