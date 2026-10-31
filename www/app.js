@@ -75,6 +75,7 @@
     });
   }
   function vis(f) { return !S.hideEmpty || f.has !== false || S.fresh.has(f.path); }
+  function pruneCopy(n) { var c = {}; Object.keys(n).forEach(function (k) { c[k] = n[k]; }); c.kids = (n.kids || []).filter(vis).map(pruneCopy); return c; }
   function prune2(n) { n.kids = (n.kids || []).filter(vis).map(prune2); return n; }
   function order() { return S.folders.concat(S.files); }
 
@@ -370,7 +371,7 @@
   function loadTrees(force) {
     if (treeCache && !force) return Promise.resolve(treeCache);
     if (treePromise) return treePromise;
-    treePromise = Promise.all(S.roots.map(function (r) { return FS.tree({ path: r.path, depth: 8 }).then(function (x) { x.tree.name = r.name; return S.hideEmpty ? prune2(x.tree) : x.tree; }); }))
+    treePromise = Promise.all(S.roots.map(function (r) { return FS.tree({ path: r.path, depth: 8 }).then(function (x) { x.tree.name = r.name; return x.tree; }); }))
       .then(function (t) { treeCache = t; treeStamp = Date.now(); treeStruct = false; treePromise = null; return t; }, function (e) { treePromise = null; throw e; });
     return treePromise;
   }
@@ -397,7 +398,7 @@
   function openDrawer() {
     var el = $("#drawerTree"), opts = { open: dOpen, cur: S.cwd };
     $("#drawer").classList.add("show"); $("#scrim").classList.add("show");
-    function render(trees) { openPathOf(trees, opts); el.innerHTML = treeHtml(trees, opts, 0); bindTree(el, opts, function (p) { closeDrawer(); go(p); }, function () { render(trees); }); }
+    function render(raw) { var trees = S.hideEmpty ? raw.map(pruneCopy) : raw; openPathOf(trees, opts); el.innerHTML = treeHtml(trees, opts, 0); bindTree(el, opts, function (p) { closeDrawer(); go(p); }, function () { render(raw); }); }
     if (treeCache) {
       render(treeCache);
       if (treeStruct || Date.now() - treeStamp > 20000) loadTrees(true).then(function (t) { if ($("#drawer").classList.contains("show") && $("#dq").value.trim() === "") render(t); }).catch(function () {});
@@ -882,7 +883,7 @@
     if (!keep) { B.q = ""; $("#bQ").value = ""; $(".bh").classList.remove("search"); }
     if (path == null) { S.cwd2 = null; store.set("cwd2", null); B.list = S.roots.map(function (r) { return { name: r.name, path: r.path, root: true, media: 0, sub: 0 }; }); drawB(); return Promise.resolve(); }
     return FS.list({ path: path, foldersOnly: true }).then(function (r) {
-      S.cwd2 = path; store.set("cwd2", path); B.list = r.folders.filter(vis).sort(byName); drawB();
+      S.cwd2 = path; store.set("cwd2", path); B.list = r.folders.sort(byName); drawB();
       if (!keep) $("#bscroll").scrollTop = 0;
     }).catch(function (e) { err(e); if (S.cwd2 !== path) goB(null); });
   }
@@ -903,7 +904,7 @@
     return hit.slice(0, 80);
   }
   function btHtml(x) {
-    var meta = x.parent != null ? x.parent : (x.root ? "" : (x.media > 0 ? x.media + "장" : "") + (x.media > 0 && x.sub ? " · " : "") + (x.sub ? "폴더 " + x.sub : ""));
+    var meta = x.parent != null ? x.parent : (x.root ? "" : (x.media > 0 ? x.media + "장" : "") + (x.media > 0 && x.sub ? " · " : "") + (x.sub ? "폴더 " + x.sub : "") || "비어 있음");
     return '<div class="it folder bt' + (x.cover ? " hascover" : "") + (colorOf(x.path) ? " col" : "") + '"' + colAttr(x.path) + ' data-p="' + esc(x.path) + '" data-f="1"><div class="th">' + (x.cover ? '<img data-p="' + esc(x.cover) + '" data-state="" alt="">' : "") + FOLDER_SVG +
       '</div><div class="lb">' + esc(x.name) + (meta ? "<small>" + esc(meta) + "</small>" : "") + "</div></div>";
   }
