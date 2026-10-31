@@ -300,6 +300,8 @@
     if (t && t.dataset.p && !S.sel.has(t.dataset.p)) return { el: t, path: t.dataset.p };
     var c = el.closest("#crumb [data-go], #crumbB [data-go]");
     if (c && c.dataset.go) return { el: c, path: c.dataset.go };
+    var bs = el.closest("#bscroll");
+    if (bs && S.split && S.cwd2 != null) return { el: bs, path: S.cwd2 };
     return null;
   }
   function autoLoop() { if (!drag || !drag.on) { raf = 0; return; } if (auto && autoEl) autoEl.scrollTop += auto; raf = requestAnimationFrame(autoLoop); }
@@ -531,8 +533,9 @@
     var pr = S.roots.filter(function (r) { return r.name === "Pictures"; })[0];
     return pr ? pr.path + "/앨범" : "";
   }
+  function unsPath() { var a = albumPath(); return a ? a + "/미분류" : ""; }
   function paintUns() { var t = S.unsCount == null ? "" : String(S.unsCount); $("#dUnsC").textContent = t; $("#tpUnsC").textContent = t; }
-  function countUns() { return FS.unsorted({ exclude: albumPath(), countOnly: true, quiet: true }).then(function (r) { S.unsCount = r.total; paintUns(); }).catch(function () {}); }
+  function countUns() { return FS.unsorted({ include: unsPath(), countOnly: true, quiet: true }).then(function (r) { S.unsCount = r.exists ? r.total : null; paintUns(); }).catch(function () {}); }
   function loadUnsorted() {
     return FS.unsorted({ exclude: albumPath() }).then(function (r) {
       S.folders = []; S.files = r.files; S.unsCount = r.total; paintUns(); sortList(); prune();
@@ -544,11 +547,20 @@
       draw(); $("#scroll").scrollTop = 0; done();
     });
   }
+  /* 미분류 = 정리 폴더(앨범) 안의 ‘미분류’ 폴더. 없으면 만들어 줌 */
   function openUnsorted() {
-    clearSel(); S.trashView = false; S.tagView = null; document.body.classList.remove("trashv");
-    S.unsorted = true; S.ci = 0;
-    if (S.split) { var a = albumPath(); if (a && !(S.cwd2 && (S.cwd2 === a || S.cwd2.indexOf(a + "/") === 0))) goB(a); }
-    return loadUnsorted().catch(err);
+    var p = unsPath(); if (!p) { toast("정리 폴더를 먼저 지정해 주세요 (⋯ 메뉴)"); return Promise.resolve(); }
+    function enter() {
+      if (S.split) { var a = albumPath(); if (a && !(S.cwd2 && (S.cwd2 === a || S.cwd2.indexOf(a + "/") === 0))) goB(a); }
+      return go(p);
+    }
+    return FS.unsorted({ include: p, countOnly: true }).then(function (r) {
+      if (r.exists) return enter();
+      return confirmBox("‘미분류’ 폴더가 없어요", "‘" + nameOf(albumPath()) + "’ 안에 ‘미분류’ 폴더를 만들까요? 아직 정리 못 한 사진을 여기에 모아 두고 캐릭터 폴더로 옮기는 용도예요.", "만들기").then(function (ok) {
+        if (!ok) return;
+        return FS.mkdir({ parent: albumPath(), name: "미분류" }).then(function (m) { keep(m.path); treeStruct = true; S.unsCount = 0; paintUns(); return enter(); });
+      });
+    }).catch(err);
   }
   $("#dUns").onclick = function () { closeDrawer(); openUnsorted(); };
   $("#tpUns").onclick = function () { closeTagPanel(); openUnsorted(); };

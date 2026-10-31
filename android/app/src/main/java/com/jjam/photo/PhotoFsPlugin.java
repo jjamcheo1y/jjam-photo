@@ -559,15 +559,24 @@ public class PhotoFsPlugin extends Plugin {
                 String ex = String.valueOf(call.getString("exclude", ""));
                 if (!ex.isEmpty()) { try { ex = new File(ex).getCanonicalPath(); } catch (Exception ignore) {} }
                 boolean countOnly = Boolean.TRUE.equals(call.getBoolean("countOnly", false));
+                String inc = String.valueOf(call.getString("include", ""));
                 List<File> all = new ArrayList<>();
-                for (String r : new String[]{"DCIM", "Pictures", "Download", "Movies"}) {
-                    File d = new File(root, r);
-                    if (d.isDirectory()) {
-                        if (!ex.isEmpty() && d.getPath().equals(ex)) continue;
-                        walkOutside(d, ex, all, 14);
+                boolean exists = true;
+                if (!inc.isEmpty()) {
+                    File d = safe(inc);
+                    exists = d.isDirectory();
+                    if (exists) walkOutside(d, "", all, 14);
+                } else {
+                    for (String r : new String[]{"DCIM", "Pictures", "Download", "Movies"}) {
+                        File d = new File(root, r);
+                        if (d.isDirectory()) {
+                            if (!ex.isEmpty() && d.getPath().equals(ex)) continue;
+                            walkOutside(d, ex, all, 14);
+                        }
                     }
                 }
                 JSObject res = new JSObject();
+                res.put("exists", exists);
                 res.put("total", all.size());
                 JSArray files = new JSArray();
                 if (!countOnly) {

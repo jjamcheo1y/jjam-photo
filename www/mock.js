@@ -42,6 +42,11 @@ function MockFS() {
   function pathNode(p) { if (p.indexOf("/.jjamtrash/") > 0) { var id = p.split("/")[p.split("/").length - 2]; var t = trash.filter(function (x) { return x.id === id; })[0]; return t && t.node; } return node(p); }
   return {
     unsorted: function (o) {
+      if (o.include) {
+        var nd = node(o.include); if (!nd) return wait({ exists: false, total: 0, files: [] });
+        var got = []; (function w(n, p) { n.kids.forEach(function (k) { var kp = p + "/" + k.name; if (k.dir) w(k, kp); else got.push({ name: k.name, path: kp, mtime: k.mtime, size: k.size, video: !!k.video }); }); })(nd, o.include);
+        return wait({ exists: true, total: got.length, files: o.countOnly ? [] : got });
+      }
       var ex = o.exclude || "", out = [];
       function walk(n, p) { n.kids.forEach(function (k) { var kp = p + "/" + k.name; if (k.dir) { if (kp !== ex) walk(k, kp); } else out.push({ name: k.name, path: kp, mtime: k.mtime, size: k.size, video: !!k.video }); }); }
       tree.kids.forEach(function (r) { var rp = HOME + "/" + r.name; if (rp !== ex) walk(r, rp); });
