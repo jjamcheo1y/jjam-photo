@@ -534,3 +534,12 @@ body:not(.split) #btnCard,#btnCard{display:grid!important;place-items:center}
 .mi[disabled]{opacity:.4;pointer-events:none}
 #pop .mi{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tn .tchk{flex:none;color:var(--accent);font-weight:700;padding-right:8px}
+
+/* 시작 화면: 앱 아이콘 + 이름 + 버전 */
+#splash{position:fixed;inset:0;z-index:95;background:var(--bg);display:grid;place-items:center;transition:opacity .35s ease;opacity:1}
+#splash.hide{opacity:0;pointer-events:none}
+.spl{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:-6vh}
+.splico{width:104px;height:104px}
+.spl b{font-size:20px;letter-spacing:-.01em}
+.spl small{font-size:13px;color:var(--mute);font-variant-numeric:tabular-nums}
+.minfo{padding:8px 12px 4px;font-size:11px;color:var(--mute);text-align:center}

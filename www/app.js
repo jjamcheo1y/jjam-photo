@@ -1,6 +1,15 @@
 /* 대짬철갤러리 — 폰 사진 폴더 정리 (폴더 위계는 폰 저장소 그대로) */
 (function () {
   "use strict";
+  var APP_VERSION = "0.8.0";
+  var APP_BUILD = window.APP_BUILD || null;
+  var VER_TEXT = "v" + APP_VERSION + (APP_BUILD ? " · 빌드 " + APP_BUILD : "");
+  var SPLASH_T0 = Date.now();
+  function hideSplash() {
+    var sp = document.getElementById("splash"); if (!sp || sp.classList.contains("hide")) return;
+    setTimeout(function () { sp.classList.add("hide"); setTimeout(function () { sp.remove(); }, 450); }, Math.max(0, 1100 - (Date.now() - SPLASH_T0)));
+  }
+  (function () { var v = document.getElementById("verTxt"); if (v) v.textContent = VER_TEXT; setTimeout(hideSplash, 4500); })();
   var $ = function (s, e) { return (e || document).querySelector(s); };
   var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
   var native = !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
@@ -439,7 +448,7 @@
   if ($("#btnUndo")) $("#btnUndo").onclick = function () { var u = UNDO[UNDO.length - 1]; if (u) runUndo(u); };
   $("#btnMore").onclick = function () {
     var ul = UNDO[UNDO.length - 1];
-    popMenu(this, '<button class="mi"' + (ul ? "" : " disabled") + ' data-m="undo">↶ 되돌리기' + (ul ? " · " + esc(ul.label) : "") + '</button><div class="msep"></div><button class="mi" data-m="mk">＋ 새 폴더 만들기</button><button class="mi" data-m="trash">휴지통 보기</button><div class="msep"></div><button class="mi' + (S.hideEmpty ? " on" : "") + '" data-m="empty">사진 없는 폴더 숨기기</button><div class="msep"></div><button class="mi" data-m="album">정리 폴더 지정 (지금: ' + esc(nameOf(albumPath()) || "없음") + ')</button><button class="mi" data-m="theme">테마 색…</button><button class="mi" data-m="re">새로고침</button><button class="mi" data-m="perm">파일 접근 권한 확인</button>', function (el) {
+    popMenu(this, '<button class="mi"' + (ul ? "" : " disabled") + ' data-m="undo">↶ 되돌리기' + (ul ? " · " + esc(ul.label) : "") + '</button><div class="msep"></div><button class="mi" data-m="mk">＋ 새 폴더 만들기</button><button class="mi" data-m="trash">휴지통 보기</button><div class="msep"></div><button class="mi' + (S.hideEmpty ? " on" : "") + '" data-m="empty">사진 없는 폴더 숨기기</button><div class="msep"></div><button class="mi" data-m="album">정리 폴더 지정 (지금: ' + esc(nameOf(albumPath()) || "없음") + ')</button><button class="mi" data-m="theme">테마 색…</button><button class="mi" data-m="re">새로고침</button><button class="mi" data-m="perm">파일 접근 권한 확인</button><div class="msep"></div><div class="minfo">대짬철갤러리 ' + VER_TEXT + '</div>', function (el) {
       el.querySelectorAll("[data-m]").forEach(function (b) {
         b.onclick = function () {
           var m = b.dataset.m; closePop();
@@ -1315,7 +1324,7 @@
     }, 4000);
     return FS.hasAccess().then(function (r) {
       clearTimeout(timer);
-      $("#perm").hidden = !!r.granted;
+      $("#perm").hidden = !!r.granted; if (!r.granted) hideSplash();
       if (manual) toast(r.granted ? "권한이 켜져 있어요" : "권한이 꺼져 있어요");
       return r.granted;
     }, function (e) { clearTimeout(timer); diag("권한 확인 실패: " + ((e && e.message) || e)); $("#perm").hidden = false; return false; });
@@ -1348,7 +1357,7 @@
       var last = store.get("cwd", null);
       setTimeout(function () { loadTrees(false, true).catch(function () {}); }, 900);
       setTimeout(countUns, 1800);
-      return go(last && rootOf(last) ? last : null).then(applySplit);
+      return go(last && rootOf(last) ? last : null).then(applySplit).then(hideSplash, hideSplash);
     }).catch(function (e) { diag("시작 실패: " + ((e && e.message) || e)); });
   }
   checkAccess().then(function (g) { if (g) start(); });

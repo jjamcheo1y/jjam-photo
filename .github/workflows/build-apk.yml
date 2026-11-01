@@ -20,6 +20,7 @@ jobs:
       - run: npm ci
       - run: node --check www/app.js && node --check www/mock.js
       - run: cp node_modules/@capacitor/core/dist/capacitor.js www/capacitor.js
+      - run: echo "window.APP_BUILD=${{ github.run_number }};" > www/build.js
       - run: npx cap sync android
       - name: 서명 키 준비
         env:

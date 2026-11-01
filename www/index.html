@@ -10,6 +10,7 @@
 </head>
 <body>
 <div id="diag"></div>
+<div id="splash"><div class="spl"><svg class="splico" viewBox="0 0 100 100" aria-hidden="true">  <defs>    <linearGradient id="back" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7aa6f5"/><stop offset="1" stop-color="#5584e0"/></linearGradient>    <linearGradient id="front" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b7d2ff"/><stop offset="1" stop-color="#78a2f2"/></linearGradient>    <filter id="sh" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#2a4f9a" flood-opacity=".35"/></filter>  </defs>  <g filter="url(#sh)">    <path d="M10 27a7 7 0 0 1 7-7h19.5a7 7 0 0 1 5 2.1l4 4.2a7 7 0 0 0 5 2.2H83a7 7 0 0 1 7 7v42a7 7 0 0 1-7 7H17a7 7 0 0 1-7-7z" fill="url(#back)"/>    <path d="M10 40a7 7 0 0 1 7-7h66a7 7 0 0 1 7 7v33a7 7 0 0 1-7 7H17a7 7 0 0 1-7-7z" fill="url(#front)"/>    <path d="M17 33.5h66a6.5 6.5 0 0 1 6.5 6.5v1H10.5v-1a6.5 6.5 0 0 1 6.5-6.5z" fill="#fff" opacity=".45"/>  </g></svg><b>대짬철갤러리</b><small id="verTxt"></small></div></div>
 <script>
 /* 앱이 시작도 못 하고 멈출 때를 대비한 맨 앞 진단: 오류를 화면 위에 보여 줌 */
 window.__diag = function (m) { var d = document.getElementById("diag"); if (!d) return; d.textContent += (d.textContent ? "\n" : "") + m; d.classList.add("show"); };
@@ -124,6 +125,7 @@ window.addEventListener("unhandledrejection", function (e) { var r = e.reason; w
 <div id="toast"></div>
 <div id="ghost"></div>
 <script src="capacitor.js"></script>
+<script src="build.js" onerror="this.remove()"></script>
 <script src="mock.js"></script>
 <script src="app.js"></script>
 </body>
