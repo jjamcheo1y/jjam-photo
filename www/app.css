@@ -510,3 +510,20 @@ body:not(.split) #btnCard,#btnCard{display:grid!important;place-items:center}
 /* 상위 폴더 화살표: 회색 배경 + 회색 아이콘 */
 .tools.upg{background:var(--hover)}
 .tools.upg .ib{color:var(--mute)}
+
+/* 정리 모드 폴더 칩 */
+#cRecent .pin{box-shadow:var(--btn-hl),0 0 0 1px var(--accent)}
+#cRecent .chipedit{color:var(--mute);background:none;box-shadow:0 0 0 1px var(--btn-bd);border-radius:6px}
+#cRecent .dot{margin-right:5px}
+.pnrow{display:flex;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px solid var(--line)}
+.pnbtns{display:flex;flex-direction:column;gap:2px;flex:none}
+.pnbtns button{width:28px;height:20px;font-size:10px;border-radius:5px;background:var(--hover);color:var(--mute)}
+.pnbtns button[disabled]{opacity:.3}
+.pnx{flex:1;min-width:0}
+.pnlbl{width:100%;padding:7px 9px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;font-size:14px;outline:none}
+.pnp{font-size:11px;color:var(--mute);margin:3px 2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pndel{flex:none;width:32px;height:32px;border-radius:7px;color:var(--danger);font-size:15px}
+.pndel:active{background:var(--hover)}
+.pnsw{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 4px;font-size:14px}
+.pnsw button{padding:6px 14px;border-radius:6px;background:var(--btn-bg);box-shadow:var(--btn-hl),0 0 0 1px var(--btn-bd);font-size:13px}
+.pnsw button.on{background:var(--btn-blue);color:#fff;box-shadow:none}

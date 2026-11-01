@@ -202,7 +202,7 @@
   function colAttr(p) { var c = colorOf(p); return c ? ' style="--fc:' + c + '"' : ""; }
   function saveColors() { store.set("fcolor", COLORS); }
   function remapColors(oldP, newP) {
-    remapFresh(oldP, newP);
+    remapFresh(oldP, newP); remapPins(oldP, newP);
     var out = {}, ch = false;
     Object.keys(COLORS).forEach(function (k) {
       if (k === oldP || k.indexOf(oldP + "/") === 0) { out[newP + k.slice(oldP.length)] = COLORS[k]; ch = true; } else out[k] = COLORS[k];
@@ -1138,6 +1138,60 @@
   var _paint = paintSel;
   paintSel = function () { _paint(); if (S.split) bHint(); };
 
+  /* ---------- 정리 모드 아래 폴더 칩: 내가 정하고 고치고 지우는 목록 ---------- */
+  var PINS = store.get("pins", []), PIN_RECENT = store.get("pinRecent", true);
+  function savePins() { store.set("pins", PINS); store.set("pinRecent", PIN_RECENT); }
+  function remapPins(oldP, newP) {
+    var ch = false;
+    PINS.forEach(function (x) { if (x.path === oldP || x.path.indexOf(oldP + "/") === 0) { x.path = newP + x.path.slice(oldP.length); ch = true; } });
+    if (ch) savePins();
+  }
+  function chipList() {
+    var out = PINS.map(function (x) { return { path: x.path, label: x.label || nameOf(x.path), pin: true }; });
+    if (PIN_RECENT || !PINS.length) {
+      var seen = {}; out.forEach(function (c) { seen[c.path] = 1; });
+      B.recent.filter(function (p) { return p !== S.cwd && !seen[p]; }).slice(0, PINS.length ? 6 : 10).forEach(function (p) { out.push({ path: p, label: nameOf(p), pin: false }); });
+    }
+    return out.filter(function (c) { return c.path !== S.cwd; });
+  }
+  function openPinSheet() {
+    function html() {
+      var rows = PINS.length ? PINS.map(function (x, i) {
+        return '<div class="pnrow" data-i="' + i + '"><div class="pnbtns"><button data-a="up"' + (i === 0 ? " disabled" : "") + '>▲</button><button data-a="dn"' + (i === PINS.length - 1 ? " disabled" : "") + '>▼</button></div>' +
+          '<div class="pnx"><input type="text" class="pnlbl" value="' + esc(x.label || nameOf(x.path)) + '" aria-label="칩 이름"><div class="pnp">' + esc(relPath(x.path)) + '</div></div><button class="pndel" data-a="del" aria-label="지우기">✕</button></div>';
+      }).join("") : '<div class="rempty" style="padding:18px 8px">아직 고정한 폴더가 없어요.<br>아래 ‘폴더 추가’로 자주 쓰는 폴더를 넣어 두세요.</div>';
+      return '<h3>정리 모드 폴더 칩</h3><div class="body">' + rows +
+        '<button class="mi" data-a="add" style="margin-top:6px">＋ 폴더 추가</button>' +
+        '<div class="pnsw"><span>최근에 옮긴 폴더도 뒤에 보이기</span><button data-a="rec" class="' + (PIN_RECENT ? "on" : "") + '">' + (PIN_RECENT ? "켜짐" : "꺼짐") + '</button></div></div><div class="btns"><button class="pri" data-done="1">완료</button></div>';
+    }
+    return sheet(html(), function (el, close) {
+      function bind() {
+        el.querySelectorAll(".pnlbl").forEach(function (inp) { inp.onchange = function () { var i = +inp.closest(".pnrow").dataset.i; PINS[i].label = inp.value.trim() === nameOf(PINS[i].path) ? "" : inp.value.trim(); savePins(); }; });
+        el.querySelectorAll("[data-a]").forEach(function (b) {
+          b.onclick = function () {
+            var a = b.dataset.a, row = b.closest(".pnrow"), i = row ? +row.dataset.i : -1;
+            if (a === "up" && i > 0) { var t = PINS[i]; PINS[i] = PINS[i - 1]; PINS[i - 1] = t; }
+            else if (a === "dn" && i < PINS.length - 1) { var t2 = PINS[i]; PINS[i] = PINS[i + 1]; PINS[i + 1] = t2; }
+            else if (a === "del") PINS.splice(i, 1);
+            else if (a === "rec") PIN_RECENT = !PIN_RECENT;
+            else if (a === "add") { close("add"); return; }
+            savePins(); el.innerHTML = html(); bind();
+          };
+        });
+        el.querySelector("[data-done]").onclick = function () { close(); };
+      }
+      bind();
+    }).then(function (r) {
+      if (r === "add") {
+        return pickLoop("칩으로 고정할 폴더를 골라 주세요", function () { return false; }).then(function (d) {
+          if (d && !PINS.some(function (x) { return x.path === d; })) { PINS.push({ path: d, label: "" }); savePins(); }
+          return openPinSheet();
+        });
+      }
+      drawCard();
+    });
+  }
+
   /* ---------- 카드 모드: 사진 한 장씩, 위로 쓸면 삭제, 아래 폴더를 누르면 이동 ---------- */
   function cardOn() { return !!(S.card && !S.trashView && (S.cwd != null || S.tagView || S.unsorted)); }
   function cardList() { return S.files.filter(function (f) { return !f.video; }); }
@@ -1163,7 +1217,7 @@
     $("#cTags").innerHTML = f ? tl.map(function (t) { return '<span class="tagchip" style="--th:' + tagHue(t) + '">#' + esc(t) + "</span>"; }).join("") + '<button data-ct="1">＋ 태그</button>' : "";
     $("#cHint").textContent = S.split ? "위로 쓸면 삭제 · 아래로 쓸면 되돌리기 · 옆으로 넘기면 건너뛰기 · 꾹 눌러 아래 폴더로 끌어 옮기기" : "위로 쓸면 삭제 · 아래로 쓸면 되돌리기 · 옆으로 넘기면 건너뛰기";
     var rc = B.recent.filter(function (p) { return p !== S.cwd; }).slice(0, 10);
-    $("#cRecent").innerHTML = rc.map(function (p) { return '<button data-p="' + esc(p) + '">' + esc(nameOf(p)) + "</button>"; }).join("");
+    $("#cRecent").innerHTML = chipList().map(function (c) { var col = colorOf(c.path); return '<button data-p="' + esc(c.path) + '"' + (c.pin ? ' class="pin"' : "") + ">" + (col ? '<i class="dot" style="background:' + col + '"></i>' : "") + esc(c.label) + "</button>"; }).join("") + '<button class="chipedit" data-ed="1">' + (PINS.length ? "✎ 편집" : "＋ 폴더 고정") + "</button>";
     ["#cPrev", "#cDel", "#cMove", "#cOpen", "#cNext"].forEach(function (id) { $(id).disabled = !f; });
     if (!f) { im.removeAttribute("src"); return; }
     var tok = ++cardTok;
@@ -1189,7 +1243,11 @@
     var f = cardList()[S.ci]; if (!f) return;
     pickLoop("‘" + f.name + "’을(를) 어디로 옮길까요?", function (p) { return p === S.cwd; }).then(function (dest) { if (dest) return cardMove(dest); }).catch(err);
   };
-  $("#cRecent").addEventListener("click", function (e) { var b = e.target.closest("button"); if (b) cardMove(b.dataset.p); });
+  $("#cRecent").addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.ed) { openPinSheet(); return; }
+    cardMove(b.dataset.p);
+  });
   $("#cOpen").onclick = function () { var f = cardList()[S.ci]; if (f) FS.openExternal({ path: f.path }).catch(err); };
   $("#btnCard").onclick = function () {
     if (S.cwd == null && !S.tagView && !S.unsorted) { toast("폴더 안으로 들어가서 써 주세요"); return; }
