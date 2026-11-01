@@ -1,7 +1,7 @@
 /* 대짬철갤러리 — 폰 사진 폴더 정리 (폴더 위계는 폰 저장소 그대로) */
 (function () {
   "use strict";
-  var APP_VERSION = "0.8.0";
+  var APP_VERSION = "0.9.0";
   var APP_BUILD = window.APP_BUILD || null;
   var VER_TEXT = "v" + APP_VERSION + (APP_BUILD ? " · 빌드 " + APP_BUILD : "");
   var SPLASH_T0 = Date.now();
@@ -121,7 +121,7 @@
     home: "", roots: [], cwd: null, folders: [], files: [],
     sort: store.get("sort", { k: "date", d: -1 }), cols: store.get("cols", 3), names: store.get("names", true),
     sel: new Set(), selOn: false, range: false, anchor: null, last: null,
-    trashView: false, trash: [], viewer: null, hideEmpty: store.get("hideEmpty", true), tagView: null, unsorted: false, unsCount: null, album: store.get("album", null), autoMax: store.get("autoMax", 4), fresh: new Set(store.get("fresh", [])), card: store.get("card", false), ci: 0
+    trashView: false, trash: [], viewer: null, hideEmpty: store.get("hideEmpty", true), favOnly: false, tagView: null, unsorted: false, unsCount: null, album: store.get("album", null), autoMax: store.get("autoMax", 4), fresh: new Set(store.get("fresh", [])), card: store.get("card", false), ci: 0
   };
 
   /* ---------- 알림 / 창 ---------- */
@@ -187,6 +187,7 @@
   function vis(f) { return !S.hideEmpty || f.has !== false || (f.sub || 0) > 0 || (f.kids && f.kids.length > 0) || S.fresh.has(f.path); }
   function pruneCopy(n) { var c = {}; Object.keys(n).forEach(function (k) { c[k] = n[k]; }); c.kids = (n.kids || []).filter(vis).map(pruneCopy); return c; }
   function prune2(n) { n.kids = (n.kids || []).filter(vis).map(prune2); return n; }
+  function favFilter(files) { return S.favOnly ? files.filter(function (f) { return FAVS[f.path]; }) : files; }
   function order() { return S.folders.concat(S.files); }
 
   function go(path, keepSel) {
@@ -198,10 +199,10 @@
     }
     return FS.list({ path: path }).then(function (r) {
       if (S.cwd !== path) S.ci = 0;
-      S.cwd = path; S.folders = r.folders.filter(vis); S.files = r.files; sortList(); store.set("cwd", path); draw(); $("#scroll").scrollTop = 0;
+      S.cwd = path; S.folders = r.folders.filter(vis); S.files = favFilter(r.files); sortList(); store.set("cwd", path); draw(); $("#scroll").scrollTop = 0;
     }).catch(function (e) { err(e); if (S.cwd !== path) go(null); });
   }
-  function reload() { B.flat = null; if (S.tagView) return loadTagView(); if (S.unsorted) return loadUnsorted(); return S.cwd == null ? go(null, true) : FS.list({ path: S.cwd }).then(function (r) { S.folders = r.folders.filter(vis); S.files = r.files; sortList(); prune(); draw(); }); }
+  function reload() { B.flat = null; if (S.tagView) return loadTagView(); if (S.unsorted) return loadUnsorted(); return S.cwd == null ? go(null, true) : FS.list({ path: S.cwd }).then(function (r) { S.folders = r.folders.filter(vis); S.files = favFilter(r.files); sortList(); prune(); draw(); }); }
   function prune() { var ok = new Set(order().map(function (x) { return x.path; })); S.sel.forEach(function (p) { if (!ok.has(p)) S.sel.delete(p); }); if (!S.sel.size) S.selOn = false, S.range = false; }
 
   /* ---------- 그리기 ---------- */
@@ -251,7 +252,7 @@
       var meta = x.root ? "" : (x.media ? x.media + "장" : "") + (x.media && x.sub ? " · " : "") + (x.sub ? "폴더 " + x.sub : "") || "비었어요";
       return '<div class="it folder' + (colorOf(x.path) ? " col" : "") + on + anc + '"' + colAttr(x.path) + ' data-p="' + esc(x.path) + '" data-f="1"><div class="th"><span class="ck"></span>' + FOLDER_SVG + '</div><div class="lb">' + esc(x.name) + (meta ? "<small>" + esc(meta) + "</small>" : "") + "</div></div>";
     }
-    return '<div class="it' + on + anc + '" data-p="' + esc(x.path) + '"><div class="th"><img data-p="' + esc(x.path) + '" data-state="" alt=""><span class="ck"></span>' + (tagsOf(x.path).length ? '<span class="tgb">#' + tagsOf(x.path).length + "</span>" : "") + (x.video ? '<span class="vid">영상</span>' : "") + '</div><div class="lb">' + esc(x.name) + "</div></div>";
+    return '<div class="it' + on + anc + '" data-p="' + esc(x.path) + '"><div class="th"><img data-p="' + esc(x.path) + '" data-state="" alt=""><span class="ck"></span>' + (favOf(x.path) ? '<span class="fvb">♥</span>' : "") + (tagsOf(x.path).length ? '<span class="tgb">#' + tagsOf(x.path).length + "</span>" : "") + (x.video ? '<span class="vid">영상</span>' : "") + '</div><div class="lb">' + esc(x.name) + "</div></div>";
   }
   function draw() {
     document.body.classList.toggle("selecting", S.selOn);
@@ -262,8 +263,8 @@
     // 위쪽 길 표시
     var c = $("#crumb"), html = '<button data-go="">홈</button>';
     $("#btnUp").classList.toggle("dim", upTarget() == null);
-    $("#ttl").textContent = S.trashView ? "휴지통" : S.unsorted ? "미분류" : S.tagView ? S.tagView.tags.map(function (t) { return "#" + t; }).join(" ") : S.cwd == null ? "홈" : nameOf(S.cwd);
-    if (S.tagView) html = '<button>' + (S.tagView.mode === "and" ? "모두 있는" : "하나라도") + ' · ' + S.files.length + '장</button><i>·</i><button data-exittag="1" style="color:var(--accent)">폴더로 돌아가기</button>';
+    $("#ttl").textContent = S.trashView ? "휴지통" : S.favOnly && S.cwd != null && !S.tagView ? nameOf(S.cwd) + " ♥" : S.unsorted ? "미분류" : S.tagView ? (S.tagView.fav ? "♥ 즐겨찾기" : S.tagView.tags.map(function (t) { return "#" + t; }).join(" ")) : S.cwd == null ? "홈" : nameOf(S.cwd);
+    if (S.tagView) html = '<button>' + (S.tagView.fav ? "즐겨찾기" : S.tagView.mode === "and" ? "모두 있는" : "하나라도") + ' · ' + S.files.length + '장</button><i>·</i><button data-exittag="1" style="color:var(--accent)">폴더로 돌아가기</button>';
     else if (S.unsorted) html = '<button>앨범 밖 사진 · ' + S.files.length + '장</button><i>·</i><button data-exittag="1" style="color:var(--accent)">폴더로 돌아가기</button>';
     else if (S.trashView) html += "<i>›</i><button>휴지통</button>";
     else if (S.cwd != null) {
@@ -298,7 +299,7 @@
     setupIO(); g.querySelectorAll(".it").forEach(function (n) { io.observe(n); });
     var em = $("#empty"), n = S.trashView ? S.trash.length : S.folders.length + S.files.length;
     if (cardOn()) drawCard();
-    em.hidden = n > 0; em.textContent = S.trashView ? "휴지통이 비었어요 (30일 지나면 자동으로 지워져요)" : S.unsorted ? "앨범 밖에 남은 사진이 없어요. 모두 정리했어요!" : S.tagView ? "이 태그가 붙은 사진이 없어요" : "이 폴더에는 사진이 없어요";
+    em.hidden = n > 0; em.textContent = S.trashView ? "휴지통이 비었어요 (30일 지나면 자동으로 지워져요)" : S.unsorted ? "앨범 밖에 남은 사진이 없어요. 모두 정리했어요!" : S.tagView ? (S.tagView.fav ? "즐겨찾기한 사진이 없어요. 카드 모드에서 사진을 꾹 눌러 보세요" : "이 태그가 붙은 사진이 없어요") : "이 폴더에는 사진이 없어요";
   }
   function paintSel() {
     document.body.classList.toggle("selecting", S.selOn);
@@ -362,6 +363,7 @@
     document.querySelectorAll(".drop").forEach(function (n) { n.classList.remove("drop"); });
     if (suppress) setTimeout(function () { suppress = false; }, 350);
     if (d && d.on && drop && d.target) { if (d.card) cardMove(d.target.path); else moveInto(selPaths(), d.target.path); }
+    else if (d && d.card && !d.on && drop) { var cf = cardList()[S.ci]; if (cf) toggleFav(cf.path); }
   }
   window.addEventListener("pointermove", function (e) {
     if (!drag) return;
@@ -472,14 +474,14 @@
         '</div><div class="opt"><span class="lbl">방향</span><button data-g="d" data-v="1" class="' + (S.sort.d === 1 ? "on" : "") + '">오름차순</button><button data-g="d" data-v="-1" class="' + (S.sort.d === -1 ? "on" : "") + '">내림차순</button></div>' +
         '<div class="opt"><span class="lbl">한 줄 칸 수</span>' + [2, 3, 4, 5, 6].map(function (n) { return '<button data-g="c" data-v="' + n + '" class="' + (S.cols === n ? "on" : "") + '">' + n + "</button>"; }).join("") +
         '</div><div class="opt"><span class="lbl">파일 이름</span><button data-g="n" data-v="1" class="' + (S.names ? "on" : "") + '">보이기</button><button data-g="n" data-v="0" class="' + (!S.names ? "on" : "") + '">숨기기</button></div>' +
-        '<div class="opt" style="margin-bottom:0"><span class="lbl">끌 때 가장자리 스크롤 속도 <b id="amv">' + S.autoMax + '</b></span><input type="range" id="amr" min="1" max="14" step="1" value="' + S.autoMax + '" style="width:100%"></div>';
+        '<div class="opt"><span class="lbl">이 폴더에서 보기</span><button data-g="f" data-v="0" class="' + (!S.favOnly ? "on" : "") + '">모두</button><button data-g="f" data-v="1" class="' + (S.favOnly ? "on" : "") + '">♥ 즐겨찾기만</button></div><div class="opt" style="margin-bottom:0"><span class="lbl">끌 때 가장자리 스크롤 속도 <b id="amv">' + S.autoMax + '</b></span><input type="range" id="amr" min="1" max="14" step="1" value="' + S.autoMax + '" style="width:100%"></div>';
     }
     popMenu($("#btnSort"), draw2(), function (el) {
       function bind() {
         el.querySelectorAll("[data-g]").forEach(function (b) {
           b.onclick = function () {
             var g = b.dataset.g, v = b.dataset.v;
-            if (g === "k") S.sort.k = v; else if (g === "d") S.sort.d = +v; else if (g === "c") S.cols = +v; else if (g === "n") S.names = v === "1";
+            if (g === "k") S.sort.k = v; else if (g === "d") S.sort.d = +v; else if (g === "c") S.cols = +v; else if (g === "n") S.names = v === "1"; else if (g === "f") { S.favOnly = v === "1"; reload().then(function () { el.innerHTML = draw2(); bind(); }); return; }
             store.set("sort", S.sort); store.set("cols", S.cols); store.set("names", S.names);
             sortList(); draw(); el.innerHTML = draw2(); bind();
           };
@@ -536,6 +538,31 @@
   function closeDrawer() { $("#drawer").classList.remove("show"); $("#scrim").classList.remove("show"); }
   $("#btnTree").onclick = openDrawer; $("#scrim").onclick = closeDrawer; document.querySelector("[data-close=drawer]").onclick = closeDrawer;
 
+  /* ---------- 즐겨찾기 사진 (이 앱 안에 저장) ---------- */
+  var FAVS = store.get("favs", {});
+  function favOf(p) { return !!FAVS[p]; }
+  function saveFavs() { store.set("favs", FAVS); paintFavCount(); }
+  function favCount() { return Object.keys(FAVS).length; }
+  function paintFavCount() { var t = favCount() ? String(favCount()) : ""; $("#dFavC").textContent = t; $("#tpFavC").textContent = t; }
+  function remapFavs(oldP, newP) {
+    var out = {}, ch = false;
+    Object.keys(FAVS).forEach(function (k) { if (k === oldP || k.indexOf(oldP + "/") === 0) { out[newP + k.slice(oldP.length)] = 1; ch = true; } else out[k] = 1; });
+    if (ch) { FAVS = out; saveFavs(); }
+  }
+  function heartPop(on) {
+    var el = $("#heartPop"); el.classList.toggle("off", !on); el.classList.remove("go"); void el.offsetWidth; el.classList.add("go");
+    if (navigator.vibrate) try { navigator.vibrate(on ? [10, 30, 10] : 8); } catch (e) {}
+  }
+  /* paths 를 모두 즐겨찾기로(on) 또는 해제(off). 되돌리기 가능 */
+  function setFavs(paths, on, quiet) {
+    var before = {}; paths.forEach(function (p) { before[p] = !!FAVS[p]; if (on) FAVS[p] = 1; else delete FAVS[p]; });
+    saveFavs(); if (S.tagView && S.tagView.fav) loadTagView(); else { draw(); if (cardOn()) drawCard(); } paintViewerFav();
+    pushUndo((on ? "♥ 즐겨찾기 " : "♡ 즐겨찾기 해제 ") + paths.length + "장", function () { paths.forEach(function (p) { if (before[p]) FAVS[p] = 1; else delete FAVS[p]; }); saveFavs(); return S.tagView && S.tagView.fav ? loadTagView() : (draw(), cardOn() && drawCard(), paintViewerFav()); });
+    if (!quiet) toast((on ? "♥ 즐겨찾기에 넣었어요" : "즐겨찾기에서 뺐어요") + (paths.length > 1 ? " · " + paths.length + "장" : ""));
+  }
+  function toggleFav(p) { var on = !FAVS[p]; setFavs([p], on, true); heartPop(on); }
+  function paintViewerFav() { var f = vList[S.viewer]; $("#vFav").classList.toggle("on", !!(f && FAVS[f.path])); }
+
   /* ---------- 태그 (이 앱 안에 저장) ---------- */
   var TAGS = store.get("tags", {});
   function tagHue(t) { var n = 0; for (var i = 0; i < t.length; i++) n = (n * 31 + t.charCodeAt(i)) % 360; return n; }
@@ -544,6 +571,7 @@
   function allTags() { var m = {}; Object.keys(TAGS).forEach(function (p) { TAGS[p].forEach(function (t) { m[t] = (m[t] || 0) + 1; }); }); return m; }
   function cleanTag(x) { return String(x).replace(/^#+/, "").trim().replace(/\s+/g, "_").replace(/[^\p{L}\p{N}_\-]/gu, "").slice(0, 24); }
   function remapTags(oldP, newP) {
+    remapFavs(oldP, newP);
     var out = {}, ch = false;
     Object.keys(TAGS).forEach(function (k) {
       if (k === oldP || k.indexOf(oldP + "/") === 0) { out[newP + k.slice(oldP.length)] = TAGS[k]; ch = true; } else out[k] = TAGS[k];
@@ -624,7 +652,7 @@
   var TP = { sel: [], mode: "or", q: "" };
   function loadTagView() {
     var tv = S.tagView; if (!tv) return Promise.resolve();
-    var paths = Object.keys(TAGS).filter(function (p) {
+    var paths = tv.fav ? Object.keys(FAVS) : Object.keys(TAGS).filter(function (p) {
       var t = TAGS[p];
       return tv.mode === "and" ? tv.tags.every(function (x) { return t.indexOf(x) >= 0; }) : tv.tags.some(function (x) { return t.indexOf(x) >= 0; });
     });
@@ -632,9 +660,11 @@
       S.folders = []; S.files = r.files; sortList(); prune(); draw(); $("#scroll").scrollTop = 0;
     });
   }
-  function openTagView(tags, mode) {
+  function openFavView() { closeDrawer(); closeTagPanel(); return openTagView(["즐겨찾기"], "or", true); }
+  $("#dFav").onclick = openFavView; $("#tpFav").onclick = openFavView;
+  function openTagView(tags, mode, fav) {
     clearSel(); S.trashView = false; document.body.classList.remove("trashv");
-    S.tagView = { tags: tags.slice(), mode: mode }; S.ci = 0;
+    S.tagView = { tags: tags.slice(), mode: mode, fav: !!fav }; S.ci = 0;
     return loadTagView().catch(err);
   }
   function drawTagList() {
@@ -763,6 +793,9 @@
     var rn = $("#actions [data-a=rename]"); rn.style.display = S.sel.size >= 1 && !S.trashView ? "" : "none"; rn.textContent = S.sel.size > 1 ? "이름 일괄" : "이름 바꾸기";
     $("#actions [data-a=color]").style.display = selHasFolder() ? "" : "none";
     $("#actions [data-a=tag]").style.display = selHasFile() ? "" : "none";
+    var fb = $("#actions [data-a=fav]"); fb.style.display = selHasFile() ? "" : "none";
+    var fps = selPaths().filter(function (p) { return S.files.some(function (f) { return f.path === p; }); });
+    fb.textContent = fps.length && fps.every(favOf) ? "♡ 해제" : "♥ 즐겨찾기";
   }
   function selHasFolder() { return !S.trashView && S.folders.some(function (f) { return S.sel.has(f.path); }); }
   function pickColor(paths) {
@@ -774,6 +807,10 @@
       paths.forEach(function (p) { if (r.c) COLORS[p] = r.c; else delete COLORS[p]; });
       saveColors(); draw(); drawB(); clearSel(); paintSel(); toast(r.c ? "폴더 색을 바꿨어요" : "기본 색으로 돌렸어요");
     });
+  }
+  function doFav() {
+    var ps = selPaths().filter(function (p) { return S.files.some(function (f) { return f.path === p; }); }); if (!ps.length) return;
+    setFavs(ps, !ps.every(favOf));
   }
   function doTag() { var ps = selPaths().filter(function (p) { return S.files.some(function (f) { return f.path === p; }); }); if (ps.length) openTagSheet(ps); }
   function doColor() { var ps = selPaths().filter(function (p) { return S.folders.some(function (f) { return f.path === p; }); }); if (ps.length) pickColor(ps); }
@@ -914,7 +951,7 @@
   }
   $("#actions").addEventListener("click", function (e) {
     var b = e.target.closest("[data-a]"); if (!b) return;
-    ({ move: doMove, trash: doTrash, rename: doRename, color: doColor, tag: doTag })[b.dataset.a]();
+    ({ move: doMove, trash: doTrash, rename: doRename, color: doColor, tag: doTag, fav: doFav })[b.dataset.a]();
   });
 
   /* ---------- 휴지통 ---------- */
@@ -961,13 +998,14 @@
   }
   function showV() {
     var f = vList[S.viewer]; if (!f) return;
-    zReset();
+    zReset(); paintViewerFav();
     $("#vName").textContent = f.name; $("#vPos").textContent = (S.viewer + 1) + " / " + vList.length;
     var tok = ++vTok, im = $("#vImg"); im.style.opacity = 0.4;
     FS.thumb({ path: f.path, size: 1600 }).then(function (r) { if (tok === vTok) { im.src = r.data; im.style.opacity = 1; } }).catch(err);
   }
   function stepV(d) { var n = S.viewer + d; if (n < 0 || n >= vList.length) return; S.viewer = n; showV(); }
   function closeV() { $("#viewer").hidden = true; S.viewer = null; $("#vImg").removeAttribute("src"); zReset(); }
+  $("#vFav").onclick = function () { var f = vList[S.viewer]; if (f) { toggleFav(f.path); } };
   $("#vOpen").onclick = function () { var f = vList[S.viewer]; if (f) FS.openExternal({ path: f.path }).catch(err); };
   $("#vClose").onclick = closeV; $("#vPrev").onclick = function () { stepV(-1); }; $("#vNext").onclick = function () { stepV(1); };
   (function () {
@@ -1118,13 +1156,14 @@
     if (navigator.vibrate) try { navigator.vibrate(10); } catch (e) {}
     if (c === true) { if (S.cwd2 == null) { toast("폴더 안으로 들어가서 만들어 주세요"); return; } addMenu(x, y, S.cwd2); return; }
     var p = c.dataset.p, isRoot = S.roots.some(function (r) { return r.path === p; }); bSup = true; setTimeout(function () { bSup = false; }, 700);
-    popAt(x, y, '<button class="mi" data-m="open">폴더 열기</button><div class="msep"></div>' + (isRoot ? "" : '<button class="mi" data-m="rn">이름 바꾸기</button>') + '<button class="mi" data-m="col">폴더 색</button><button class="mi" data-m="mk">＋ 이 안에 새 폴더</button>' + (isRoot ? "" : '<div class="msep"></div><button class="mi" data-m="del" style="color:var(--danger)">휴지통으로</button>'), function (el) {
+    popAt(x, y, '<button class="mi" data-m="open">폴더 열기</button><div class="msep"></div>' + (isRoot ? "" : '<button class="mi" data-m="rn">이름 바꾸기</button>') + '<button class="mi" data-m="col">폴더 색</button><button class="mi" data-m="pin">' + (PINS.some(function (x) { return x.path === p; }) ? "정리 칩에서 빼기" : "정리 칩에 고정") + '</button><button class="mi" data-m="mk">＋ 이 안에 새 폴더</button>' + (isRoot ? "" : '<div class="msep"></div><button class="mi" data-m="del" style="color:var(--danger)">휴지통으로</button>'), function (el) {
       el.querySelectorAll("[data-m]").forEach(function (b) {
         b.onclick = function () {
           var m = b.dataset.m; closePop();
           if (m === "open") { B.mode = "name"; store.set("bmode", "name"); goB(p); }
           else if (m === "rn") renameItem(p);
           else if (m === "col") pickColor([p]);
+          else if (m === "pin") { var pi = PINS.findIndex(function (x) { return x.path === p; }); if (pi >= 0) PINS.splice(pi, 1); else PINS.push({ path: p, label: "" }); savePins(); toast(pi >= 0 ? "정리 칩에서 뺐어요" : "정리 칩에 고정했어요"); if (cardOn()) drawCard(); }
           else if (m === "mk") newFolder(p);
           else confirmBox("‘" + nameOf(p) + "’ 폴더를 지울까요?", "안의 사진까지 모두 휴지통으로 가요. 30일 안에는 복원할 수 있어요.", "휴지통으로", true).then(function (ok) {
             if (!ok) return;
@@ -1236,7 +1275,7 @@
     var l = cardList(), im = $("#cImg"), emp = $("#cEmpty");
     if (S.ci >= l.length) S.ci = Math.max(0, l.length - 1);
     var f = l[S.ci];
-    $("#cName").textContent = f ? f.name : "";
+    $("#cName").textContent = f ? f.name : ""; $("#cFav").classList.toggle("on", !!(f && FAVS[f.path]));
     $("#cPos").textContent = f ? (S.ci + 1) + " / " + l.length : "";
     emp.textContent = f ? "" : "이 폴더에는 사진이 없어요";
     im.style.visibility = f ? "visible" : "hidden";
@@ -1265,6 +1304,7 @@
   }
   $("#cPrev").onclick = function () { cardStep(-1); }; $("#cNext").onclick = function () { cardStep(1); };
   $("#cDel").onclick = cardDelete;
+  $("#cFav").onclick = function () { var f = cardList()[S.ci]; if (f) toggleFav(f.path); };
   $("#cTags").addEventListener("click", function (e) { if (!e.target.closest("[data-ct]")) return; var f = cardList()[S.ci]; if (f) openTagSheet([f.path]).then(drawCard); });
   $("#cMove").onclick = function () {
     var f = cardList()[S.ci]; if (!f) return;
@@ -1286,11 +1326,13 @@
     stage.addEventListener("pointerdown", function (e) {
       if (!cardOn() || !cardList()[S.ci]) return;
       st = { x: e.clientX, y: e.clientY, dx: 0, dy: 0 }; stage.setPointerCapture(e.pointerId); im.classList.remove("anim");
-      clearTimeout(lp);
+      var e0x = e.clientX, e0y = e.clientY; clearTimeout(lp);
       lp = setTimeout(function () {
-        if (!st || Math.hypot(st.dx, st.dy) > 9 || !S.split) return;
-        drag = { x: st.x, y: st.y, on: false, target: null, card: true }; suppress = true;
+        if (!st || Math.hypot(st.dx, st.dy) > 9) return;
+        var cur = cardList()[S.ci]; if (!cur) return;
         st = null; im.style.transform = ""; im.style.opacity = 1;
+        if (!S.split) { suppress = true; toggleFav(cur.path); return; }
+        drag = { x: e0x, y: e0y, on: false, target: null, card: true }; suppress = true;
         if (navigator.vibrate) try { navigator.vibrate(12); } catch (x) {}
       }, 400);
     });
@@ -1356,7 +1398,7 @@
       S.home = r.home; S.roots = r.roots;
       var last = store.get("cwd", null);
       setTimeout(function () { loadTrees(false, true).catch(function () {}); }, 900);
-      setTimeout(countUns, 1800);
+      setTimeout(countUns, 1800); paintFavCount();
       return go(last && rootOf(last) ? last : null).then(applySplit).then(hideSplash, hideSplash);
     }).catch(function (e) { diag("시작 실패: " + ((e && e.message) || e)); });
   }

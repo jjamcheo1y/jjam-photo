@@ -544,3 +544,20 @@ body:not(.split) #btnCard,#btnCard{display:grid!important;place-items:center}
 .spl small{font-size:13px;color:var(--mute);font-variant-numeric:tabular-nums}
 .minfo{padding:8px 12px 4px;font-size:11px;color:var(--mute);text-align:center}
 .splico,.splico *{stroke:none}
+
+/* ===================== 즐겨찾기 ===================== */
+.fvb{position:absolute;left:5px;bottom:5px;z-index:2;width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.92);color:#ff3b5c;font-size:12px;display:grid;place-items:center;box-shadow:0 1px 3px rgba(0,0,0,.3);pointer-events:none}
+.fvi{background:linear-gradient(to bottom,#ff7a93,#ff3b5c)!important}
+.fvi svg{fill:#fff;stroke:none}
+#dFavC,#tpFavC{color:#ff3b5c}
+.dsp.fav{background:rgba(255,59,92,.12)}
+#cFav,#vFav{flex:none}
+#cFav svg,#vFav svg{fill:none;stroke:currentColor;stroke-width:2}
+#cFav.on,#vFav.on{color:#ff3b5c}
+#cFav.on svg,#vFav.on svg{fill:#ff3b5c;stroke:#ff3b5c}
+#heartPop{position:fixed;left:50%;top:44%;width:120px;height:120px;margin:-60px 0 0 -60px;z-index:80;pointer-events:none;opacity:0;color:#ff3b5c}
+#heartPop svg{width:100%;height:100%;fill:#ff3b5c;stroke:none;filter:drop-shadow(0 6px 14px rgba(255,59,92,.45))}
+#heartPop.off svg{fill:#9aa0aa;filter:none}
+#heartPop.go{animation:hpop .7s ease-out}
+@keyframes hpop{0%{opacity:0;transform:scale(.4)}25%{opacity:1;transform:scale(1.15)}55%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.05) translateY(-14px)}}
+#actions .act{font-size:13px;padding-left:0;padding-right:0}
