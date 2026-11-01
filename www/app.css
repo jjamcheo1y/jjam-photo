@@ -533,3 +533,4 @@ body:not(.split) #btnCard,#btnCard{display:grid!important;place-items:center}
 .tools.right #btnUp.dim{opacity:.3}
 .mi[disabled]{opacity:.4;pointer-events:none}
 #pop .mi{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tn .tchk{flex:none;color:var(--accent);font-weight:700;padding-right:8px}

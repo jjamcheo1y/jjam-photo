@@ -495,9 +495,9 @@
   function treeHtml(nodes, opts, depth) {
     return nodes.map(function (n) {
       var has = n.kids && n.kids.length, dis = opts.disabled && opts.disabled(n.path), open = opts.open[n.path], c = colorOf(n.path);
-      return '<div class="tk" style="' + (depth ? "" : "margin-left:0") + '"><div class="tn' + (dis ? " dis" : "") + (opts.cur === n.path ? " cur" : "") + '" data-p="' + esc(n.path) + '" data-k="' + (has ? 1 : 0) + '">' +
+      return '<div class="tk" style="' + (depth ? "" : "margin-left:0") + '"><div class="tn' + (dis ? " dis" : "") + ((opts.cur === n.path || (opts.sel && opts.sel[n.path])) ? " cur" : "") + '" data-p="' + esc(n.path) + '" data-k="' + (has ? 1 : 0) + '">' +
         '<span class="fi' + (has ? " kids" : "") + (open ? " open" : "") + (c ? " col" : "") + '"' + (c ? ' style="--fc:' + c + '"' : "") + ' data-t="1">' + FOLDER_SVG + '</span>' +
-        '<span class="tl"><span class="nm">' + esc(n.name) + '</span></span>' + (n.media ? '<span class="tc">' + n.media + "</span>" : "") + "</div>" +
+        '<span class="tl"><span class="nm">' + esc(n.name) + '</span></span>' + (n.media ? '<span class="tc">' + n.media + "</span>" : "") + (opts.sel && opts.sel[n.path] ? '<span class="tchk">✓</span>' : "") + "</div>" +
         (has && open ? treeHtml(n.kids, opts, depth + 1) : "") + "</div>";
     }).join("");
   }
@@ -708,29 +708,40 @@
     });
   });
 
-  function pickFolder(title, disabledFn) {
+  function pickFolder(title, disabledFn, multi, init) {
     return loadTrees(treeStruct).then(function (trees) {
-      return sheet("<h3>" + esc(title) + '</h3><div class="body" id="pkTree"></div><div class="btns"><button data-x="c">취소</button><button data-x="mk">＋ 새 폴더</button><button class="pri" data-x="ok" disabled style="opacity:.4">여기로 이동</button></div>', function (el, close) {
-        var opts = { open: {}, cur: null, disabled: disabledFn }, box = $("#pkTree", el), okb = $("[data-x=ok]", el);
+      return sheet("<h3>" + esc(title) + '</h3>' + (multi ? '<div style="font-size:12px;color:var(--mute);margin:-6px 4px 8px">여러 폴더를 눌러서 고를 수 있어요 (다시 누르면 해제)</div>' : "") + '<div class="body" id="pkTree"></div><div class="btns"><button data-x="c">취소</button><button data-x="mk">＋ 새 폴더</button><button class="pri" data-x="ok" disabled style="opacity:.4">' + (multi ? "폴더를 골라 주세요" : "여기로 이동") + "</button></div>", function (el, close) {
+        var opts = { open: {}, cur: null, sel: multi ? {} : null, disabled: disabledFn }, box = $("#pkTree", el), okb = $("[data-x=ok]", el), last = null;
+        (init || []).forEach(function (p) { opts.sel[p] = true; });
         if (S.cwd) trees.forEach(function (t) { if (S.cwd === t.path || S.cwd.indexOf(t.path + "/") === 0) { var acc = t.path; opts.open[acc] = true; S.cwd.slice(t.path.length + 1).split("/").forEach(function (s) { if (s) { acc += "/" + s; opts.open[acc] = true; } }); } });
+        function paintOk() {
+          if (!multi) return;
+          var n = Object.keys(opts.sel).length; okb.disabled = !n; okb.style.opacity = n ? 1 : 0.4; okb.textContent = n ? n + "개 고정" : "폴더를 골라 주세요";
+        }
         function redraw() { box.innerHTML = treeHtml(trees, opts, 0); }
-        redraw();
-        bindTree(box, opts, function (p) { opts.cur = p; okb.disabled = false; okb.style.opacity = 1; redraw(); }, redraw);
+        redraw(); paintOk();
+        bindTree(box, opts, function (p) {
+          last = p;
+          if (multi) { if (opts.sel[p]) delete opts.sel[p]; else opts.sel[p] = true; paintOk(); }
+          else { opts.cur = p; okb.disabled = false; okb.style.opacity = 1; }
+          redraw();
+        }, redraw);
         el.querySelector("[data-x=c]").onclick = function () { close(); };
-        okb.onclick = function () { if (opts.cur) close(opts.cur); };
+        okb.onclick = function () { if (multi) { var arr = Object.keys(opts.sel); if (arr.length) close(arr); } else if (opts.cur) close(opts.cur); };
         el.querySelector("[data-x=mk]").onclick = function () {
-          if (!opts.cur) { toast("먼저 만들 위치의 폴더를 눌러 주세요"); return; }
-          close({ mk: opts.cur });
+          var base = multi ? last : opts.cur;
+          if (!base) { toast("먼저 만들 위치의 폴더를 눌러 주세요"); return; }
+          close({ mk: base, sel: multi ? Object.keys(opts.sel) : null });
         };
       });
     });
   }
   /* 이동할 곳 고르기 — 새 폴더를 만들면 같은 창을 다시 열어 이어서 고름 */
-  function pickLoop(title, dis) {
-    return pickFolder(title, dis).then(function (r) {
+  function pickLoop(title, dis, multi, init) {
+    return pickFolder(title, dis, multi, init).then(function (r) {
       if (r && r.mk) {
         return askText("새 폴더 이름", "", "만들기").then(function (n) {
-          return (n ? FS.mkdir({ parent: r.mk, name: n }).then(function (m) { keep(m.path); }) : Promise.resolve()).then(function () { return pickLoop(title, dis); });
+          return (n ? FS.mkdir({ parent: r.mk, name: n }).then(function (m) { keep(m.path); treeStruct = true; }) : Promise.resolve()).then(function () { return pickLoop(title, dis, multi, r.sel); });
         });
       }
       return r;
@@ -1185,8 +1196,13 @@
       bind();
     }).then(function (r) {
       if (r === "add") {
-        return pickLoop("칩으로 고정할 폴더를 골라 주세요", function () { return false; }).then(function (d) {
-          if (d && !PINS.some(function (x) { return x.path === d; })) { PINS.push({ path: d, label: "" }); savePins(); }
+        return pickLoop("칩으로 고정할 폴더를 고르세요 (체크한 폴더가 칩이 돼요)", function () { return false; }, true, PINS.map(function (x) { return x.path; })).then(function (list) {
+          if (list) {
+            // 체크한 폴더 목록이 곧 고정 목록: 체크를 풀면 칩에서 빠지고, 새로 체크하면 뒤에 더해짐(기존 순서·이름표는 유지)
+            var set = {}; list.forEach(function (d) { set[d] = 1; });
+            PINS = PINS.filter(function (x) { return set[x.path]; }).concat(list.filter(function (d) { return !PINS.some(function (x) { return x.path === d; }); }).map(function (d) { return { path: d, label: "" }; }));
+            savePins();
+          }
           return openPinSheet();
         });
       }
