@@ -1,7 +1,7 @@
 /* 대짬철갤러리 — 폰 사진 폴더 정리 (폴더 위계는 폰 저장소 그대로) */
 (function () {
   "use strict";
-  var APP_VERSION = "0.9.0";
+  var APP_VERSION = "0.9.1";
   var APP_BUILD = window.APP_BUILD || null;
   var VER_TEXT = "v" + APP_VERSION + (APP_BUILD ? " · 빌드 " + APP_BUILD : "");
   var SPLASH_T0 = Date.now();
@@ -50,9 +50,9 @@
   var BUSY_LABEL = {
     list: "폴더 읽는 중", tree: "폴더 목록 읽는 중", search: "검색 중", unsorted: "미분류 사진 찾는 중", stat: "태그 사진 불러오는 중",
     move: "사진 옮기는 중", trash: "휴지통으로 보내는 중", restore: "복원하는 중", purge: "지우는 중", renameMany: "이름 바꾸는 중",
-    mkdir: "폴더 만드는 중", rename: "이름 바꾸는 중", listTrash: "휴지통 읽는 중"
+    share: "공유 준비 중", copyClip: "사진 복사 중", mkdir: "폴더 만드는 중", rename: "이름 바꾸는 중", listTrash: "휴지통 읽는 중"
   };
-  ["hasAccess", "requestAccess", "roots", "list", "tree", "thumb", "move", "mkdir", "rename", "renameMany", "trash", "listTrash", "restore", "purge", "openExternal", "search", "stat", "unsorted"].forEach(function (m) {
+  ["hasAccess", "requestAccess", "roots", "list", "tree", "thumb", "move", "mkdir", "rename", "renameMany", "trash", "listTrash", "restore", "purge", "openExternal", "search", "stat", "unsorted", "share", "copyClip", "copyText"].forEach(function (m) {
     FS[m] = function (a) {
       var lab = BUSY_LABEL[m];
       if (!lab || (a && a.quiet)) return FS0[m](a);
@@ -427,12 +427,12 @@
   function popMenu(anchor, html, bind) {
     var pop = $("#pop"); pop.innerHTML = html; pop.hidden = false; $("#popScrim").hidden = false;
     var r = anchor.getBoundingClientRect();
-    pop.style.left = "auto"; pop.style.top = (r.bottom + 6) + "px"; pop.style.right = Math.max(8, window.innerWidth - r.right) + "px";
+    pop.style.bottom = "auto"; pop.dataset.up = ""; pop.style.left = "auto"; pop.style.top = (r.bottom + 6) + "px"; pop.style.right = Math.max(8, window.innerWidth - r.right) + "px";
     bind && bind(pop);
   }
   function popAt(x, y, html, bind) {
     var pop = $("#pop"); pop.innerHTML = html; pop.hidden = false; $("#popScrim").hidden = false;
-    pop.style.right = "auto"; pop.style.left = "0px"; pop.style.top = "0px";
+    pop.dataset.up = ""; pop.style.bottom = "auto"; pop.style.right = "auto"; pop.style.left = "0px"; pop.style.top = "0px";
     var w = pop.offsetWidth, h = pop.offsetHeight;
     pop.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + "px"; pop.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + "px";
     bind && bind(pop);
@@ -795,6 +795,7 @@
     $("#actions [data-a=tag]").style.display = selHasFile() ? "" : "none";
     var fb = $("#actions [data-a=fav]"); fb.style.display = selHasFile() ? "" : "none";
     var fps = selPaths().filter(function (p) { return S.files.some(function (f) { return f.path === p; }); });
+    $("#actions [data-a=share]").style.display = selHasFile() ? "" : "none";
     fb.textContent = fps.length && fps.every(favOf) ? "♡ 해제" : "♥ 즐겨찾기";
   }
   function selHasFolder() { return !S.trashView && S.folders.some(function (f) { return S.sel.has(f.path); }); }
@@ -808,6 +809,31 @@
       saveColors(); draw(); drawB(); clearSel(); paintSel(); toast(r.c ? "폴더 색을 바꿨어요" : "기본 색으로 돌렸어요");
     });
   }
+  /* 공유 / 복사 메뉴 (버튼 위로 펼쳐짐) */
+  function popUp(anchor, html, bind) {
+    var pop = $("#pop"); pop.innerHTML = html; pop.hidden = false; $("#popScrim").hidden = false;
+    var r = anchor.getBoundingClientRect();
+    pop.style.left = "auto"; pop.style.right = Math.max(8, window.innerWidth - r.right) + "px";
+    if (r.top > window.innerHeight / 2) { pop.style.top = "auto"; pop.style.bottom = (window.innerHeight - r.top + 8) + "px"; pop.dataset.up = "1"; }
+    else { pop.style.bottom = "auto"; pop.style.top = (r.bottom + 6) + "px"; pop.dataset.up = ""; }
+    bind && bind(pop);
+  }
+  function shareMenu(anchor, paths) {
+    var files = paths.filter(function (p) { return /\.[A-Za-z0-9]+$/.test(p) && !S.folders.some(function (f) { return f.path === p; }); });
+    if (!files.length) { toast("공유할 사진을 골라 주세요"); return; }
+    var n = files.length;
+    popUp(anchor, '<div class="minfo" style="padding-top:2px">' + n + '장</div><button class="mi" data-m="share">다른 앱으로 공유</button><button class="mi" data-m="clip">사진 복사 <small style="color:var(--mute)">(붙여넣기용)</small></button><div class="msep"></div><button class="mi" data-m="name">파일 이름을 글자로 복사</button><button class="mi" data-m="path">전체 경로를 글자로 복사</button>', function (el) {
+      el.querySelectorAll("[data-m]").forEach(function (b) {
+        b.onclick = function () {
+          var m = b.dataset.m; closePop();
+          if (m === "share") FS.share({ paths: files }).catch(err);
+          else if (m === "clip") FS.copyClip({ paths: files }).then(function (r) { toast(r.count + "장을 복사했어요 · 붙여넣기가 되는 앱에서 붙여넣어 보세요"); }).catch(err);
+          else FS.copyText({ text: files.map(function (p) { return m === "name" ? nameOf(p) : p; }).join("\n") }).then(function () { toast("글자로 복사했어요 · " + n + "개"); }).catch(err);
+        };
+      });
+    });
+  }
+  function doShare(btn) { shareMenu(btn, selPaths()); }
   function doFav() {
     var ps = selPaths().filter(function (p) { return S.files.some(function (f) { return f.path === p; }); }); if (!ps.length) return;
     setFavs(ps, !ps.every(favOf));
@@ -951,7 +977,7 @@
   }
   $("#actions").addEventListener("click", function (e) {
     var b = e.target.closest("[data-a]"); if (!b) return;
-    ({ move: doMove, trash: doTrash, rename: doRename, color: doColor, tag: doTag, fav: doFav })[b.dataset.a]();
+    ({ move: doMove, trash: doTrash, rename: doRename, color: doColor, tag: doTag, fav: doFav, share: function () { doShare(b); } })[b.dataset.a]();
   });
 
   /* ---------- 휴지통 ---------- */
@@ -1005,6 +1031,7 @@
   }
   function stepV(d) { var n = S.viewer + d; if (n < 0 || n >= vList.length) return; S.viewer = n; showV(); }
   function closeV() { $("#viewer").hidden = true; S.viewer = null; $("#vImg").removeAttribute("src"); zReset(); }
+  $("#vShare").onclick = function () { var f = vList[S.viewer]; if (f) shareMenu(this, [f.path]); };
   $("#vFav").onclick = function () { var f = vList[S.viewer]; if (f) { toggleFav(f.path); } };
   $("#vOpen").onclick = function () { var f = vList[S.viewer]; if (f) FS.openExternal({ path: f.path }).catch(err); };
   $("#vClose").onclick = closeV; $("#vPrev").onclick = function () { stepV(-1); }; $("#vNext").onclick = function () { stepV(1); };
@@ -1304,6 +1331,7 @@
   }
   $("#cPrev").onclick = function () { cardStep(-1); }; $("#cNext").onclick = function () { cardStep(1); };
   $("#cDel").onclick = cardDelete;
+  $("#cShare").onclick = function () { var f = cardList()[S.ci]; if (f) shareMenu(this, [f.path]); };
   $("#cFav").onclick = function () { var f = cardList()[S.ci]; if (f) toggleFav(f.path); };
   $("#cTags").addEventListener("click", function (e) { if (!e.target.closest("[data-ct]")) return; var f = cardList()[S.ci]; if (f) openTagSheet([f.path]).then(drawCard); });
   $("#cMove").onclick = function () {

@@ -561,3 +561,7 @@ body:not(.split) #btnCard,#btnCard{display:grid!important;place-items:center}
 #heartPop.go{animation:hpop .7s ease-out}
 @keyframes hpop{0%{opacity:0;transform:scale(.4)}25%{opacity:1;transform:scale(1.15)}55%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.05) translateY(-14px)}}
 #actions .act{font-size:13px;padding-left:0;padding-right:0}
+
+#pop[data-up="1"]{transform-origin:bottom right}
+#vShare,#cShare{flex:none}
+.vtop #vShare svg,.ctop #cShare svg{fill:none}

@@ -49,7 +49,7 @@ window.addEventListener("unhandledrejection", function (e) { var r = e.reason; w
   <div id="panes">
     <main id="scroll" class="pane"><div id="grid"></div><div id="empty" hidden></div></main>
     <section id="card" class="pane">
-      <div class="ctop"><b id="cName"></b><span id="cPos"></span><button class="ib" id="cFav" aria-label="즐겨찾기"><svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.8a4.3 4.3 0 0 1 7.5 2.5c0 5.6-7.5 10.2-7.5 10.2z"/></svg></button></div>
+      <div class="ctop"><b id="cName"></b><span id="cPos"></span><button class="ib" id="cShare" aria-label="공유"><svg viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4M5 13v6a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6"/></svg></button><button class="ib" id="cFav" aria-label="즐겨찾기"><svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.8a4.3 4.3 0 0 1 7.5 2.5c0 5.6-7.5 10.2-7.5 10.2z"/></svg></button></div>
       <div class="ctags" id="cTags"></div>
       <div id="cStage"><img id="cImg" alt="" draggable="false"><div id="cEmpty"></div></div>
       <div class="cbar">
@@ -67,6 +67,7 @@ window.addEventListener("unhandledrejection", function (e) { var r = e.reason; w
       <footer id="actions">
         <button class="act" data-a="move">이동</button>
         <button class="act" data-a="rename">이름 바꾸기</button>
+        <button class="act" data-a="share">공유</button>
         <button class="act" data-a="fav">♥</button>
         <button class="act" data-a="tag">태그</button>
         <button class="act" data-a="color">색</button>
@@ -106,7 +107,7 @@ window.addEventListener("unhandledrejection", function (e) { var r = e.reason; w
 <div id="scrim"></div>
 
 <div id="viewer" hidden>
-  <div class="vtop"><button class="ib" id="vClose"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span id="vName"></span><span id="vPos"></span><button class="ib" id="vFav" aria-label="즐겨찾기"><svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.8a4.3 4.3 0 0 1 7.5 2.5c0 5.6-7.5 10.2-7.5 10.2z"/></svg></button><button class="ib" id="vOpen" aria-label="갤러리에서 열기"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button></div>
+  <div class="vtop"><button class="ib" id="vClose"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span id="vName"></span><span id="vPos"></span><button class="ib" id="vShare" aria-label="공유"><svg viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4M5 13v6a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6"/></svg></button><button class="ib" id="vFav" aria-label="즐겨찾기"><svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.8a4.3 4.3 0 0 1 7.5 2.5c0 5.6-7.5 10.2-7.5 10.2z"/></svg></button><button class="ib" id="vOpen" aria-label="갤러리에서 열기"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button></div>
   <div id="vStage"><img id="vImg" alt=""></div>
   <button class="vnav l" id="vPrev">‹</button><button class="vnav r" id="vNext">›</button>
 </div>

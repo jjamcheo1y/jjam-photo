@@ -1,6 +1,9 @@
 package com.jjam.photo;
 
 import android.Manifest;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
@@ -335,6 +338,87 @@ public class PhotoFsPlugin extends Plugin {
         } catch (Exception e) {
             call.reject("열지 못했어요: " + e.getMessage());
         }
+    }
+
+    /* ---------- 공유 / 클립보드 ---------- */
+    private ArrayList<Uri> shareUris(JSArray arr, String[] mimeOut) throws Exception {
+        ArrayList<Uri> uris = new ArrayList<>();
+        boolean allImg = true, allVid = true;
+        for (String p : strings(arr)) {
+            File f = safe(p);
+            if (!f.isFile()) continue;
+            if (uris.size() >= 200) break;
+            uris.add(FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", f));
+            boolean v = VID.contains(ext(f.getName()));
+            if (v) allImg = false; else allVid = false;
+        }
+        mimeOut[0] = uris.isEmpty() ? "*/*" : allImg ? "image/*" : allVid ? "video/*" : "*/*";
+        return uris;
+    }
+
+    private static ClipData clipOf(Context c, ArrayList<Uri> uris) {
+        ClipData clip = ClipData.newUri(c.getContentResolver(), "사진", uris.get(0));
+        for (int i = 1; i < uris.size(); i++) clip.addItem(new ClipData.Item(uris.get(i)));
+        return clip;
+    }
+
+    @PluginMethod
+    public void share(final PluginCall call) {
+        try {
+            String[] mime = new String[1];
+            ArrayList<Uri> uris = shareUris(call.getArray("paths"), mime);
+            if (uris.isEmpty()) { call.reject("공유할 사진이 없어요"); return; }
+            Intent send;
+            if (uris.size() == 1) { send = new Intent(Intent.ACTION_SEND); send.putExtra(Intent.EXTRA_STREAM, uris.get(0)); }
+            else { send = new Intent(Intent.ACTION_SEND_MULTIPLE); send.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris); }
+            send.setType(mime[0]);
+            send.setClipData(clipOf(getContext(), uris));
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Intent chooser = Intent.createChooser(send, "공유");
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            getContext().startActivity(chooser);
+            JSObject r = new JSObject();
+            r.put("count", uris.size());
+            call.resolve(r);
+        } catch (Exception e) {
+            call.reject("공유하지 못했어요: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void copyClip(final PluginCall call) {
+        try {
+            String[] mime = new String[1];
+            final ArrayList<Uri> uris = shareUris(call.getArray("paths"), mime);
+            if (uris.isEmpty()) { call.reject("복사할 사진이 없어요"); return; }
+            getActivity().runOnUiThread(() -> {
+                try {
+                    ClipboardManager cm = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+                    cm.setPrimaryClip(clipOf(getContext(), uris));
+                    JSObject r = new JSObject();
+                    r.put("count", uris.size());
+                    call.resolve(r);
+                } catch (Exception e) {
+                    call.reject("복사하지 못했어요: " + e.getMessage());
+                }
+            });
+        } catch (Exception e) {
+            call.reject("복사하지 못했어요: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void copyText(final PluginCall call) {
+        final String text = String.valueOf(call.getString("text", ""));
+        getActivity().runOnUiThread(() -> {
+            try {
+                ClipboardManager cm = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+                cm.setPrimaryClip(ClipData.newPlainText("글자", text));
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("복사하지 못했어요: " + e.getMessage());
+            }
+        });
     }
 
     /** 갤러리 앱이 앨범 맥락으로 열 수 있게 MediaStore 주소를 먼저 찾아 봄 */

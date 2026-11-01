@@ -74,6 +74,9 @@ function MockFS() {
       o.items.forEach(function (it) { var nd = pathNodeByTmp(parentOf(it.path), it.name); nd.name = it.name; out.push({ from: it.path, to: parentOf(it.path) + "/" + it.name }); });
       return wait({ renamed: out });
     },
+    share: function (o) { window.__shared = o.paths; return wait({ count: o.paths.length }); },
+    copyClip: function (o) { window.__clip = o.paths; return wait({ count: o.paths.length }); },
+    copyText: function (o) { window.__clipText = o.text; return wait({}); },
     openExternal: function (o) { window.__opened = o.path; return wait({}); },
     hasAccess: function () { return wait({ granted: true }); },
     requestAccess: function () { return wait({}); },
