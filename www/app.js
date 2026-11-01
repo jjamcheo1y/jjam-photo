@@ -1,7 +1,7 @@
 /* 대짬철갤러리 — 폰 사진 폴더 정리 (폴더 위계는 폰 저장소 그대로) */
 (function () {
   "use strict";
-  var APP_VERSION = "0.9.1";
+  var APP_VERSION = "0.9.2";
   var APP_BUILD = window.APP_BUILD || null;
   var VER_TEXT = "v" + APP_VERSION + (APP_BUILD ? " · 빌드 " + APP_BUILD : "");
   var SPLASH_T0 = Date.now();
@@ -191,7 +191,7 @@
   function order() { return S.folders.concat(S.files); }
 
   function go(path, keepSel) {
-    S.tagView = null; S.unsorted = false; S.trashView = false; document.body.classList.remove("trashv");
+    S.tagView = null; if (S.unsorted && S.cardBefore != null) { S.card = S.cardBefore; S.cardBefore = null; } S.unsorted = false; S.trashView = false; document.body.classList.remove("trashv");
     if (!keepSel) clearSel();
     if (path == null) {
       S.cwd = null; S.folders = S.roots.map(function (r) { return { name: r.name, path: r.path, mtime: 0, media: 0, sub: 0, root: true }; }); S.files = [];
@@ -618,7 +618,7 @@
   }
   function unsPath() { var a = albumPath(); return a ? a + "/미분류" : ""; }
   function paintUns() { var t = S.unsCount == null ? "" : String(S.unsCount); $("#dUnsC").textContent = t; $("#tpUnsC").textContent = t; }
-  function countUns() { return FS.unsorted({ include: unsPath(), countOnly: true, quiet: true }).then(function (r) { S.unsCount = r.exists ? r.total : null; paintUns(); }).catch(function () {}); }
+  function countUns() { return FS.unsorted({ exclude: albumPath(), countOnly: true, quiet: true }).then(function (r) { S.unsCount = r.total; paintUns(); }).catch(function () {}); }
   function loadUnsorted() {
     return FS.unsorted({ exclude: albumPath() }).then(function (r) {
       S.folders = []; S.files = r.files; S.unsCount = r.total; paintUns(); sortList(); prune();
@@ -630,20 +630,14 @@
       draw(); $("#scroll").scrollTop = 0; done();
     });
   }
-  /* 미분류 = 정리 폴더(앨범) 안의 ‘미분류’ 폴더. 없으면 만들어 줌 */
+  /* 미분류 = 정리 폴더(Pictures/앨범) 밖에 있는 모든 사진. 누르면 바로 카드 모드로 열림 */
   function openUnsorted() {
-    var p = unsPath(); if (!p) { toast("정리 폴더를 먼저 지정해 주세요 (⋯ 메뉴)"); return Promise.resolve(); }
-    function enter() {
-      if (S.split) { var a = albumPath(); if (a && !(S.cwd2 && (S.cwd2 === a || S.cwd2.indexOf(a + "/") === 0))) goB(a); }
-      return go(p);
-    }
-    return FS.unsorted({ include: p, countOnly: true }).then(function (r) {
-      if (r.exists) return enter();
-      return confirmBox("‘미분류’ 폴더가 없어요", "‘" + nameOf(albumPath()) + "’ 안에 ‘미분류’ 폴더를 만들까요? 아직 정리 못 한 사진을 여기에 모아 두고 캐릭터 폴더로 옮기는 용도예요.", "만들기").then(function (ok) {
-        if (!ok) return;
-        return FS.mkdir({ parent: albumPath(), name: "미분류" }).then(function (m) { keep(m.path); treeStruct = true; S.unsCount = 0; paintUns(); return enter(); });
-      });
-    }).catch(err);
+    var a = albumPath(); if (!a) { toast("정리 폴더를 먼저 지정해 주세요 (⋯ 메뉴)"); return Promise.resolve(); }
+    clearSel(); S.trashView = false; S.tagView = null; document.body.classList.remove("trashv");
+    if (!S.unsorted) S.cardBefore = S.card;
+    S.unsorted = true; S.ci = 0; S.card = true;
+    if (S.split && !(S.cwd2 && (S.cwd2 === a || S.cwd2.indexOf(a + "/") === 0))) goB(a);
+    return loadUnsorted().then(function () { document.body.classList.toggle("card", cardOn()); paintModes(); if (cardOn()) drawCard(); }).catch(err);
   }
   $("#dUns").onclick = function () { closeDrawer(); openUnsorted(); };
   $("#tpUns").onclick = function () { closeTagPanel(); openUnsorted(); };
@@ -1304,7 +1298,7 @@
     var f = l[S.ci];
     $("#cName").textContent = f ? f.name : ""; $("#cFav").classList.toggle("on", !!(f && FAVS[f.path]));
     $("#cPos").textContent = f ? (S.ci + 1) + " / " + l.length : "";
-    emp.textContent = f ? "" : "이 폴더에는 사진이 없어요";
+    emp.textContent = f ? "" : (S.unsorted ? "앨범 밖에 남은 사진이 없어요. 모두 정리했어요!" : "이 폴더에는 사진이 없어요");
     im.style.visibility = f ? "visible" : "hidden";
     var tl = f ? tagsOf(f.path) : [];
     $("#cTags").innerHTML = f ? tl.map(function (t) { return '<span class="tagchip" style="--th:' + tagHue(t) + '">#' + esc(t) + "</span>"; }).join("") + '<button data-ct="1">＋ 태그</button>' : "";
