@@ -527,3 +527,9 @@ body:not(.split) #btnCard,#btnCard{display:grid!important;place-items:center}
 .pnsw{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 4px;font-size:14px}
 .pnsw button{padding:6px 14px;border-radius:6px;background:var(--btn-bg);box-shadow:var(--btn-hl),0 0 0 1px var(--btn-bd);font-size:13px}
 .pnsw button.on{background:var(--btn-blue);color:#fff;box-shadow:none}
+
+/* 상위 폴더 버튼은 오른쪽 도구 첫 자리 */
+.tools.right #btnUp{color:var(--ink)}
+.tools.right #btnUp.dim{opacity:.3}
+.mi[disabled]{opacity:.4;pointer-events:none}
+#pop .mi{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

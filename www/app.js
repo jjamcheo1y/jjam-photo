@@ -125,7 +125,7 @@
   }
   /* 직전 작업 되돌리기 (최근 20개) */
   var UNDO = [];
-  function paintUndo() { var b = $("#btnUndo"), l = UNDO[UNDO.length - 1]; b.hidden = !l; if (l) b.title = "되돌리기: " + l.label; }
+  function paintUndo() { var b = $("#btnUndo"), l = UNDO[UNDO.length - 1]; if (b) { b.hidden = !l; if (l) b.title = "되돌리기: " + l.label; } }
   function pushUndo(label, fn) { var u = { label: label, fn: fn, done: false }; UNDO.push(u); if (UNDO.length > 20) UNDO.shift(); paintUndo(); return u; }
   function runUndo(u) { if (!u || u.done) return Promise.resolve(); u.done = true; UNDO = UNDO.filter(function (x) { return x !== u; }); paintUndo(); return Promise.resolve(u.fn()).catch(err); }
   var sheetClose = null;
@@ -436,13 +436,15 @@
     ["pointerup", "pointercancel", "pointerleave"].forEach(function (ev) { el.addEventListener(ev, function () { if (t) { clearTimeout(t); t = null; } }); });
   }
   $("#popScrim").onclick = closePop;
-  $("#btnUndo").onclick = function () { var u = UNDO[UNDO.length - 1]; if (u) runUndo(u); };
+  if ($("#btnUndo")) $("#btnUndo").onclick = function () { var u = UNDO[UNDO.length - 1]; if (u) runUndo(u); };
   $("#btnMore").onclick = function () {
-    popMenu(this, '<button class="mi" data-m="mk">＋ 새 폴더 만들기</button><button class="mi" data-m="trash">휴지통 보기</button><div class="msep"></div><button class="mi' + (S.hideEmpty ? " on" : "") + '" data-m="empty">사진 없는 폴더 숨기기</button><div class="msep"></div><button class="mi" data-m="album">정리 폴더 지정 (지금: ' + esc(nameOf(albumPath()) || "없음") + ')</button><button class="mi" data-m="theme">테마 색…</button><button class="mi" data-m="re">새로고침</button><button class="mi" data-m="perm">파일 접근 권한 확인</button>', function (el) {
+    var ul = UNDO[UNDO.length - 1];
+    popMenu(this, '<button class="mi"' + (ul ? "" : " disabled") + ' data-m="undo">↶ 되돌리기' + (ul ? " · " + esc(ul.label) : "") + '</button><div class="msep"></div><button class="mi" data-m="mk">＋ 새 폴더 만들기</button><button class="mi" data-m="trash">휴지통 보기</button><div class="msep"></div><button class="mi' + (S.hideEmpty ? " on" : "") + '" data-m="empty">사진 없는 폴더 숨기기</button><div class="msep"></div><button class="mi" data-m="album">정리 폴더 지정 (지금: ' + esc(nameOf(albumPath()) || "없음") + ')</button><button class="mi" data-m="theme">테마 색…</button><button class="mi" data-m="re">새로고침</button><button class="mi" data-m="perm">파일 접근 권한 확인</button>', function (el) {
       el.querySelectorAll("[data-m]").forEach(function (b) {
         b.onclick = function () {
           var m = b.dataset.m; closePop();
-          if (m === "mk") { if (S.tagView || S.unsorted) toast("폴더 안에서 만들어 주세요"); else newFolder(S.cwd); }
+          if (m === "undo") { var u0 = UNDO[UNDO.length - 1]; if (u0) runUndo(u0); }
+          else if (m === "mk") { if (S.tagView || S.unsorted) toast("폴더 안에서 만들어 주세요"); else newFolder(S.cwd); }
           else if (m === "album") pickLoop("‘미분류’ 기준이 될 정리 폴더를 골라 주세요", function () { return false; }).then(function (d) { if (!d) return; S.album = d; store.set("album", d); S.unsCount = null; paintUns(); toast("정리 폴더: " + nameOf(d)); countUns(); if (S.unsorted) loadUnsorted(); }).catch(err);
           else if (m === "trash") openTrash();
           else if (m === "empty") { S.hideEmpty = !S.hideEmpty; store.set("hideEmpty", S.hideEmpty); treeCache = null; B.flat = null; Promise.all([reload(), refreshB()]).then(function () { toast(S.hideEmpty ? "사진 없는 폴더를 숨겼어요" : "사진 없는 폴더도 보여요"); }); }
