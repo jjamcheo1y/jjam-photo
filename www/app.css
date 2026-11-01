@@ -543,3 +543,4 @@ body:not(.split) #btnCard,#btnCard{display:grid!important;place-items:center}
 .spl b{font-size:20px;letter-spacing:-.01em}
 .spl small{font-size:13px;color:var(--mute);font-variant-numeric:tabular-nums}
 .minfo{padding:8px 12px 4px;font-size:11px;color:var(--mute);text-align:center}
+.splico,.splico *{stroke:none}
